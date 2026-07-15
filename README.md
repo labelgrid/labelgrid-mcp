@@ -64,7 +64,7 @@ Add this to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
 
 ### First run / setup mode
 
-If you start the server without `LABELGRID_API_TOKEN`, it does not fail — it launches in **setup mode** and exposes a single `setup` helper. Just ask your AI client to "set up LabelGrid" and it will walk you through creating a token and adding it to your config. Once the token is set, restart your client and the full toolset loads automatically.
+If you start the server without `LABELGRID_API_TOKEN`, it does not fail — it launches in **setup mode**: the full tool catalog stays listed so you can see what the server offers, and a `setup` helper leads the way. Nothing can run in this state — every catalog tool returns setup guidance instead. Just ask your AI client to "set up LabelGrid" and it will walk you through creating a token and adding it to your config. Once the token is set, restart your client and the tools go live.
 
 ## Getting a token
 
