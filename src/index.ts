@@ -14,37 +14,8 @@ import { isToolEnabled } from './gating.js';
 import { FULL_WRITES_NOTICE, LEGAL_SUMMARY } from './legal.js';
 import { log } from './log.js';
 import { buildServer } from './server.js';
-import { accountingTools } from './tools/accounting.js';
-import { analyticsTools } from './tools/analytics.js';
-import { catalogReadTools } from './tools/catalog-read.js';
-import { catalogWriteTools } from './tools/catalog-write.js';
-import { deliveryTools } from './tools/delivery.js';
-import { filesReadTools } from './tools/files-read.js';
-import { fullWriteTools } from './tools/full-writes.js';
-import { identityTools } from './tools/identity.js';
-import { referenceTools } from './tools/reference.js';
-import { releaseWriteTools } from './tools/release-write.js';
-import { reviewReadTools } from './tools/review-read.js';
-import type { ToolDef } from './tools/types.js';
-import { webhookTools } from './tools/webhooks.js';
+import { allTools } from './tools/all.js';
 import { VERSION } from './version.js';
-
-function allTools(): ToolDef[] {
-  return [
-    ...identityTools,
-    ...referenceTools,
-    ...analyticsTools,
-    ...catalogReadTools,
-    ...filesReadTools,
-    ...reviewReadTools,
-    ...deliveryTools,
-    ...accountingTools,
-    ...webhookTools,
-    ...catalogWriteTools,
-    ...releaseWriteTools,
-    ...fullWriteTools,
-  ];
-}
 
 async function main(): Promise<void> {
   let config: Config;
@@ -67,7 +38,7 @@ async function main(): Promise<void> {
   });
 
   if (config.setupMode) {
-    const server = buildServer(config, client, []);
+    const server = buildServer(config, client, allTools());
     log(
       'info',
       `labelgrid-mcp v${VERSION} — setup mode (no API token configured); call the "setup" tool for guided setup`,

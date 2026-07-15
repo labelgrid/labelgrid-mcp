@@ -29,8 +29,10 @@ function buildInstructions(config: Config): string {
   if (config.setupMode) {
     return [
       'No LabelGrid API token is configured, so the account is not connected yet. ' +
-        'Call the `setup` tool for step-by-step instructions to connect. No account ' +
-        'data can be accessed in this state.',
+        'Call the `setup` tool for step-by-step instructions to connect. The full ' +
+        'tool catalog is listed so you can see what the server offers, but no ' +
+        'account data can be accessed in this state — every tool returns setup ' +
+        'guidance until a token is configured.',
       LEGAL_SUMMARY,
     ].join('\n\n');
   }
@@ -50,12 +52,21 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
     { instructions: buildInstructions(config) },
   );
 
-  // In setup mode ONLY the setup helper is registered — the account is not
-  // connected, so none of the API-backed tools are exposed.
-  const registered = config.setupMode ? setupTools : tools;
+  // In setup mode the setup helper leads, and the full catalog stays LISTED so
+  // introspection shows what the server offers — but every catalog tool is
+  // inert: without a token no API call is possible, so invoking one returns
+  // setup guidance instead of executing.
+  const registered = config.setupMode ? [...setupTools, ...tools] : tools;
 
   for (const tool of registered) {
-    if (!isToolEnabled(tool, config)) continue;
+    const isSetupHelper = tool.toolset === 'setup';
+    // Listing rule: connected mode applies the full gate matrix; setup mode
+    // lists the whole catalog (only honoring an explicit toolset narrowing),
+    // because nothing can execute without a token anyway.
+    const listable = config.setupMode
+      ? config.toolsets === null || config.toolsets.has(tool.toolset)
+      : isToolEnabled(tool, config);
+    if (!isSetupHelper && !listable) continue;
 
     server.registerTool(
       tool.name,
@@ -66,8 +77,20 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
         annotations: { title: tool.title, ...tool.annotations },
       },
       async (args: Record<string, unknown>): Promise<CallToolResult> => {
+        // Not connected: every catalog tool refuses with setup guidance.
+        if (config.setupMode && !isSetupHelper) {
+          return toToolResult({
+            error: {
+              code: 'NOT_CONNECTED',
+              message:
+                'No LabelGrid API token is configured, so this tool cannot run yet. ' +
+                'Call the `setup` tool for step-by-step instructions to connect your account.',
+              status: 0,
+            },
+          }) as CallToolResult;
+        }
         // Defense in depth: even a registered tool re-verifies its gate.
-        if (!isToolEnabled(tool, config)) {
+        if (!isSetupHelper && !isToolEnabled(tool, config)) {
           return toToolResult({
             error: {
               code: 'TOOL_DISABLED',
