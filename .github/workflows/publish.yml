@@ -8,6 +8,7 @@ name: Publish
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -18,10 +19,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      # NOTE: no registry-url here — setup-node's registry-url writes an .npmrc
+      # with a placeholder token, which makes npm skip the OIDC trusted-publishing
+      # exchange. Trusted publishing needs npm to find NO configured credentials.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
       - name: Build
