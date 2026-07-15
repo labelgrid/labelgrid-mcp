@@ -1,0 +1,47 @@
+{
+  "manifest_version": "0.2",
+  "name": "labelgrid",
+  "display_name": "LabelGrid",
+  "version": "0.1.1",
+  "description": "Manage your LabelGrid music catalog, releases, files, analytics, royalties, and distribution from your AI client — the official LabelGrid MCP server.",
+  "long_description": "The official Model Context Protocol server for LabelGrid, the music distribution platform. Connect Claude Desktop to your own LabelGrid account and work with your catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language. Reads are always on; writes are opt-out and full distribution actions are doubly opt-in, so nothing ships without your say-so. If you install it without a token, the server starts in guided setup mode and walks you through creating one in chat.",
+  "author": {
+    "name": "LabelGrid",
+    "url": "https://labelgrid.com"
+  },
+  "homepage": "https://labelgrid.com",
+  "documentation": "https://github.com/labelgrid/labelgrid-mcp#readme",
+  "support": "https://github.com/labelgrid/labelgrid-mcp/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/labelgrid/labelgrid-mcp"
+  },
+  "license": "MIT",
+  "keywords": ["labelgrid", "music-distribution", "mcp", "catalog", "releases"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "LABELGRID_API_TOKEN": "${user_config.api_token}"
+      }
+    }
+  },
+  "user_config": {
+    "api_token": {
+      "type": "string",
+      "title": "LabelGrid API token",
+      "description": "Your LabelGrid API token, from the dashboard under Profile → API Tokens. Optional: leave it blank to start the server in guided setup mode, which walks you through creating and adding a token in chat.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}
