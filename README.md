@@ -6,7 +6,17 @@
 
 You need a LabelGrid API token (see [Getting a token](#getting-a-token)) and Node.js 20+. The server runs on demand via `npx` — nothing to install globally.
 
-### Claude Desktop
+### Claude Desktop — one-click install
+
+The quickest way in, with no config file to edit:
+
+1. Download **`labelgrid.mcpb`** from the [latest release](https://github.com/labelgrid/labelgrid-mcp/releases/latest).
+2. Double-click it, or open Claude Desktop → **Settings → Extensions** and drag the file in.
+3. When prompted, paste your [LabelGrid API token](#getting-a-token) — or leave it blank and let the in-chat guided setup walk you through creating one.
+
+To update later, download the newer `.mcpb` and install it over the old one. Prefer to configure it yourself, or using a different client? The manual `npx` setup below works everywhere.
+
+### Claude Desktop — manual config
 
 Add this to your `claude_desktop_config.json` (Settings → Developer → Edit Config):
 
