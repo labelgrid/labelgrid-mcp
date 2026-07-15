@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.labelgrid/labelgrid-mcp",
   "description": "Official LabelGrid MCP server — manage your music catalog, releases, analytics and distribution.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "websiteUrl": "https://labelgrid.com",
   "repository": {
     "url": "https://github.com/labelgrid/labelgrid-mcp",
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@labelgrid/mcp",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },

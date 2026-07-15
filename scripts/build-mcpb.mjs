@@ -54,7 +54,8 @@ const manifest = JSON.parse(readFileSync(join(root, 'mcpb', 'manifest.json'), 'u
 manifest.version = pkg.version;
 writeFileSync(join(staging, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-// Pack it. `mcpb` is a dependency-free npx tool; keep it pinned-latest here.
-run('npx', ['-y', '@anthropic-ai/mcpb@latest', 'pack', staging, output]);
+// Pack it. Pinned to the exact CLI version this build was validated with —
+// this script also runs in CI with write access, so no floating versions.
+run('npx', ['-y', '@anthropic-ai/mcpb@2.1.2', 'pack', staging, output]);
 
 console.error(`\nbuild-mcpb: wrote ${output} (v${pkg.version}).`);
