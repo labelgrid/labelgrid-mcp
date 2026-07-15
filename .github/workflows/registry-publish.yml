@@ -1,0 +1,31 @@
+name: MCP Registry
+
+# Publishes/updates the server listing on the MCP registry
+# (registry.modelcontextprotocol.io) from server.json. Runs on demand.
+# Authenticates via GitHub Actions OIDC, which carries this repository's
+# organization identity — no stored credentials.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-listing:
+    name: publish server.json to the MCP registry
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Install mcp-publisher
+        env:
+          PUBLISHER_VERSION: v1.8.0
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --help >/dev/null
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+      - name: Login (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+      - name: Publish listing
+        run: ./mcp-publisher publish
