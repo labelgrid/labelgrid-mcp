@@ -32,5 +32,16 @@ jobs:
         run: npm run leak-guard
       - name: Update npm for trusted publishing
         run: npm install -g npm@latest && npm --version
+      - name: Skip if this version is already on the registry
+        id: check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@labelgrid/mcp@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "@labelgrid/mcp@$VERSION already published — skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish to npm (provenance)
+        if: steps.check.outputs.published == 'false'
         run: npm publish --provenance --access public
