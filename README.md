@@ -1,6 +1,6 @@
-# @labelgrid/mcp
+# LabelGrid MCP Server
 
-The official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com). Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your catalog, releases, files, analytics, accounting, webhooks, and distribution in natural language — it is a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
+`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — it is a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
 
 ## Quickstart
 
