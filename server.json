@@ -1,0 +1,59 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.labelgrid/labelgrid-mcp",
+  "description": "Official LabelGrid MCP server — connect your AI client to your LabelGrid account to manage catalog, releases, files, analytics, accounting, webhooks and distribution.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/labelgrid/labelgrid-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registry_type": "npm",
+      "identifier": "@labelgrid/mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "LABELGRID_API_TOKEN",
+          "description": "Your LabelGrid API token. Create one in your dashboard under Profile → API Tokens. Without it the server starts in setup mode and walks you through creating one.",
+          "is_required": false,
+          "is_secret": true
+        },
+        {
+          "name": "LABELGRID_API_URL",
+          "description": "Override the API base URL. Defaults to the production API.",
+          "is_required": false
+        },
+        {
+          "name": "LABELGRID_ENABLE_WRITES",
+          "description": "Enable safe writes (create/update drafts, labels, artists, and similar). Enabled by default; set to false for read-only.",
+          "is_required": false
+        },
+        {
+          "name": "LABELGRID_ENABLE_FULL_WRITES",
+          "description": "Enable full writes (distribution, takedowns, immutable uploads). Disabled by default; also requires LABELGRID_FULL_WRITES_ACK.",
+          "is_required": false
+        },
+        {
+          "name": "LABELGRID_FULL_WRITES_ACK",
+          "description": "Must equal the exact acknowledgment sentence (see the README safety section) to arm full writes.",
+          "is_required": false,
+          "is_secret": false
+        },
+        {
+          "name": "LABELGRID_TOOLSETS",
+          "description": "Comma-separated subset of toolsets to expose (identity, reference, catalog, releases, review, analytics, accounting, delivery, webhooks, distribution). Defaults to all.",
+          "is_required": false
+        },
+        {
+          "name": "LABELGRID_READ_ONLY",
+          "description": "Force reads only; overrides both write flags. Defaults to false.",
+          "is_required": false
+        }
+      ]
+    }
+  ]
+}

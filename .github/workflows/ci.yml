@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    name: build & test (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - name: Lint & format check
+        run: npm run lint
+      - name: Type-check & build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Repository hygiene scan
+        run: npm run leak-guard
+      - name: API coverage drift (offline fixture)
+        run: npm run check-coverage
+      - name: README tool-table drift
+        run: node scripts/gen-tool-docs.mjs --check

@@ -1,0 +1,36 @@
+name: Publish
+
+# Publishes to npm via trusted publishing (GitHub OIDC + provenance) when a
+# GitHub Release is published. No long-lived npm token is stored — the registry
+# verifies the workflow's OIDC identity. Requires the npm package's trusted
+# publisher to be configured for this repo + workflow.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: build, verify & publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+      - name: Repository hygiene scan
+        run: npm run leak-guard
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest && npm --version
+      - name: Publish to npm (provenance)
+        run: npm publish --provenance --access public

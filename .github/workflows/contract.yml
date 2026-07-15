@@ -1,0 +1,32 @@
+name: Contract Tests
+
+# Runs the sandbox contract suite against the LabelGrid sandbox. Secret-gated
+# (skips cleanly when the secrets are absent) and never runs on forks — forks
+# do not have access to the secrets and must not attempt sandbox calls. The
+# sandbox base URL and token are supplied as repository secrets so no host or
+# credential is ever committed.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
+
+jobs:
+  contract:
+    name: sandbox contract suite
+    runs-on: ubuntu-latest
+    if: github.repository == 'labelgrid/labelgrid-mcp'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Contract tests (sandbox)
+        run: npm run test:contract
+        env:
+          LABELGRID_API_TOKEN: ${{ secrets.SANDBOX_API_TOKEN }}
+          LABELGRID_API_URL: ${{ secrets.SANDBOX_API_URL }}
