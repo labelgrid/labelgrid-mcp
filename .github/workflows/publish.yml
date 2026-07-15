@@ -48,3 +48,28 @@ jobs:
       - name: Publish to npm (provenance)
         if: steps.check.outputs.published == 'false'
         run: npm publish --provenance --access public
+
+  # Separate job so its contents:write scope never mixes with the publish job's
+  # id-token:write (trusted publishing). Builds the Claude Desktop one-click
+  # bundle and attaches it to the same GitHub Release. Release events only —
+  # there is no release to upload to on workflow_dispatch.
+  bundle:
+    name: build & attach Claude Desktop bundle
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the MCPB bundle
+        run: npm run build:mcpb
+      - name: Attach the bundle to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" labelgrid.mcpb --clobber
