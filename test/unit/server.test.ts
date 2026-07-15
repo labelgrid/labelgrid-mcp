@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LabelGridClient } from '../../src/api/http.js';
 import type { Config } from '../../src/config.js';
 import { buildServer } from '../../src/server.js';
+import { allTools } from '../../src/tools/all.js';
 import { identityTools } from '../../src/tools/identity.js';
 import type { ToolDef } from '../../src/tools/types.js';
 
@@ -154,11 +155,56 @@ describe('buildServer legal disclosure instructions', () => {
 describe('buildServer setup mode', () => {
   const setupCfg = () => config({ setupMode: true, token: null, writes: false });
 
-  it('registers exactly the setup tool and nothing else', async () => {
+  it('lists the setup tool plus the full inert catalog', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
-    const client = await connect(setupCfg(), fetchFn as unknown as typeof fetch);
+    const client = await connectWithTools(
+      setupCfg(),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name)).toEqual(['setup']);
+    const names = tools.map((t) => t.name);
+    // The setup helper leads, and the whole catalog is visible to introspection
+    // (write gates do not hide tools here — nothing can execute without a token).
+    expect(names).toContain('setup');
+    expect(names).toContain('get_me');
+    expect(names).toContain('create_release');
+    expect(names).toContain('distribute_release');
+    expect(names.length).toBeGreaterThan(80);
+  });
+
+  it('catalog tools refuse with setup guidance and never touch the network', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      setupCfg(),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    for (const name of ['get_me', 'distribute_release']) {
+      const result = await client.callTool({
+        name,
+        arguments: name === 'get_me' ? {} : { release_id: 1 },
+      });
+      expect(result.isError).toBe(true);
+      const text = (result.content as Array<{ text: string }>)[0].text;
+      expect(text).toContain('NOT_CONNECTED');
+      expect(text).toContain('setup');
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('setup mode honors an explicit toolset narrowing in the listing', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ setupMode: true, token: null, writes: false, toolsets: new Set(['identity']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('setup');
+    expect(names).toContain('get_me');
+    expect(names).not.toContain('create_release');
   });
 
   it('returns the connection guide without making any API call', async () => {
