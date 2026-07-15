@@ -19,6 +19,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       # NOTE: no registry-url here — setup-node's registry-url writes an .npmrc
       # with a placeholder token, which makes npm skip the OIDC trusted-publishing
       # exchange. Trusted publishing needs npm to find NO configured credentials.
@@ -34,7 +36,7 @@ jobs:
       - name: Repository hygiene scan
         run: npm run leak-guard
       - name: Update npm for trusted publishing
-        run: npm install -g npm@latest && npm --version
+        run: npm install -g npm@11.18.0 && npm --version
       - name: Skip if this version is already on the registry
         id: check
         run: |
@@ -62,6 +64,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
