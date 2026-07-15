@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.contract.local
+*.local.mjs
+*.log
+.DS_Store
+tmp/
