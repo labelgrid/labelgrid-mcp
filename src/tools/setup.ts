@@ -29,6 +29,7 @@ const SETUP_GUIDE = {
   summary:
     'This LabelGrid MCP server is running in setup mode because no API token is configured yet. Walk the user through the steps below so their AI client can connect to their LabelGrid account. Relay the steps in plain language and never ask the user to paste their token into the chat.',
   steps: [
+    'Make sure the account has API access: it is part of LabelGrid API plans — see the API Overview and Quickstart (https://help.labelgrid.com/en/integrations/api-overview). If the API Tokens page is missing from the dashboard, the account does not have API access yet.',
     'Log in to your LabelGrid dashboard and open Profile → API Tokens (https://app.labelgrid.com/user/profile/api-tokens).',
     'Create a new token and copy it.',
     'Add the token to your MCP client configuration as the LABELGRID_API_TOKEN environment variable (do NOT paste the token into this chat).',

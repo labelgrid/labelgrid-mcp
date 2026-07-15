@@ -56,8 +56,10 @@ If you start the server without `LABELGRID_API_TOKEN`, it does not fail — it l
 
 ## Getting a token
 
+API access is part of LabelGrid's [API plans](https://help.labelgrid.com/en/integrations/api-overview) — see the [API Overview and Quickstart](https://help.labelgrid.com/en/integrations/api-overview) for what the API offers and how to activate it.
+
 1. Sign in to your LabelGrid dashboard.
-2. Go to **Profile → API Tokens**.
+2. Go to **Profile → API Tokens**. (If you don't see this option, your account doesn't have API access yet — the [API overview](https://help.labelgrid.com/en/integrations/api-overview) explains how to get it, or contact support.)
 3. Create a token and copy it into your client config as `LABELGRID_API_TOKEN`.
 
 Treat the token like a password: it grants access to your catalog. Never commit it or paste it into a shared chat. Revoke a token any time from the same screen (or with the `revoke_api_token` tool).
