@@ -1,0 +1,9 @@
+node_modules
+dist
+mcpb/build
+labelgrid.mcpb
+test
+.github
+.git
+*.md
+.env*
