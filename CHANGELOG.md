@@ -5,6 +5,35 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-16
+
+### Changed
+
+- **BREAKING: the 83 per-endpoint tools were consolidated into 30 tools** that
+  select their target with an argument (`entity`, `view`, `action`, `check`,
+  `format`, `target`, `type`). Every 0.2.x capability is preserved — see the
+  full old→new mapping in the README's
+  [Migrating from 0.2.x](./README.md#migrating-from-02x) section.
+- **BREAKING: toolsets regrouped into eight sets** — `account`, `reference`,
+  `catalog`, `releases`, `insights`, `finance`, `webhooks`, `distribution`.
+  Legacy set names (`identity`, `review`, `delivery`, `analytics`,
+  `accounting`) are still accepted in `LABELGRID_TOOLSETS` and map silently to
+  their current set.
+- **The `webhooks` toolset is now off by default.** Name it explicitly in
+  `LABELGRID_TOOLSETS` to enable it. The default connected surface is 21 tools;
+  the setup-mode listing applies the same default.
+- Large read responses default to a concise projection: reads marked with
+  `response_format` keep only high-signal fields (ids always kept) unless
+  `response_format: 'detailed'` is passed, which returns the verbatim API
+  response.
+
+### Added
+
+- MCP resources: the nine reference datasets are exposed at
+  `labelgrid://reference/{type}` alongside the `list_reference_data` tool.
+- A tool-catalog token budget gate in CI (`npm run measure-tokens`) that fails
+  when the full catalog's estimated context cost exceeds 8,000 tokens.
+
 ## [0.2.2] - 2026-07-16
 
 ### Changed

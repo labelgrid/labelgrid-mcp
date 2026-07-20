@@ -13,9 +13,7 @@ const getAccount: ToolDef = {
     '`profile` returns the account profile — including the release submission limit/quota and terms-acceptance status — use it to confirm which account your API token belongs to before making other calls; ' +
     '`balance` returns your accounting summary — current balance and related account-level financial totals.',
   inputShape: {
-    view: z
-      .enum(['profile', 'balance'])
-      .describe('Which account read: profile (account profile) or balance (accounting summary).'),
+    view: z.enum(['profile', 'balance']).describe('Which account read.'),
   },
   annotations: { readOnlyHint: true },
   handler: (args, { client }) => client.get(args.view === 'balance' ? '/account' : '/me'),

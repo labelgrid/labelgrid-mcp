@@ -28,17 +28,37 @@ export const FULL_WRITES_ACK = 'I accept responsibility for AI-driven distributi
 
 /** The valid toolset names; unknown names in LABELGRID_TOOLSETS warn and are ignored. */
 export const KNOWN_TOOLSETS: ReadonlySet<string> = new Set([
-  'identity',
+  'account',
   'reference',
   'catalog',
   'releases',
-  'review',
-  'analytics',
-  'accounting',
-  'delivery',
+  'insights',
+  'finance',
   'webhooks',
   'distribution',
 ]);
+
+/**
+ * Pre-0.3.0 toolset names still accepted in LABELGRID_TOOLSETS, translated
+ * silently (no warning) to their current toolset. Names that survived the
+ * regroup (catalog, reference, releases, webhooks, distribution) map to
+ * themselves via KNOWN_TOOLSETS and need no alias entry.
+ */
+export const LEGACY_TOOLSET_ALIASES: Readonly<Record<string, string>> = {
+  identity: 'account',
+  review: 'releases',
+  delivery: 'releases',
+  analytics: 'insights',
+  accounting: 'finance',
+};
+
+/**
+ * Toolsets excluded from the default surface when LABELGRID_TOOLSETS is unset
+ * (`toolsets === null`). Naming one explicitly in LABELGRID_TOOLSETS enables
+ * it. Consulted by gating and by the setup-mode listing, so the advertised
+ * surface matches reality.
+ */
+export const defaultExcludedToolsets: ReadonlySet<string> = new Set(['webhooks']);
 
 /** Thrown when the environment cannot produce a usable config. */
 export class ConfigError extends Error {
@@ -99,6 +119,12 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s.length > 0)) {
+      const alias = LEGACY_TOOLSET_ALIASES[name];
+      if (alias !== undefined) {
+        // Legacy names are translated silently — no warning.
+        toolsets.add(alias);
+        continue;
+      }
       if (!KNOWN_TOOLSETS.has(name)) {
         log('warn', `Unknown toolset in LABELGRID_TOOLSETS: "${name}" (ignored).`);
       }

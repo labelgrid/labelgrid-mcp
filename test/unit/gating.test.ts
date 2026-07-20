@@ -25,14 +25,35 @@ describe('isToolEnabled reads', () => {
     );
   });
 
-  it('enables a read tool when toolsets is null (all)', () => {
-    expect(isToolEnabled(tool('read', 'analytics'), config({ toolsets: null }))).toBe(true);
+  it('enables a read tool when toolsets is null (default surface)', () => {
+    expect(isToolEnabled(tool('read', 'insights'), config({ toolsets: null }))).toBe(true);
   });
 
   it('disables a read tool whose toolset is not selected', () => {
     expect(
-      isToolEnabled(tool('read', 'analytics'), config({ toolsets: new Set(['catalog']) })),
+      isToolEnabled(tool('read', 'insights'), config({ toolsets: new Set(['catalog']) })),
     ).toBe(false);
+  });
+});
+
+describe('isToolEnabled default-excluded toolsets (webhooks)', () => {
+  it('disables a webhooks tool when toolsets is null (default-off)', () => {
+    expect(isToolEnabled(tool('read', 'webhooks'), config({ toolsets: null }))).toBe(false);
+    expect(
+      isToolEnabled(tool('safe_write', 'webhooks'), config({ toolsets: null, writes: true })),
+    ).toBe(false);
+  });
+
+  it('enables a webhooks tool when webhooks is named explicitly', () => {
+    expect(
+      isToolEnabled(tool('read', 'webhooks'), config({ toolsets: new Set(['webhooks']) })),
+    ).toBe(true);
+    expect(
+      isToolEnabled(
+        tool('safe_write', 'webhooks'),
+        config({ toolsets: new Set(['webhooks']), writes: true }),
+      ),
+    ).toBe(true);
   });
 });
 

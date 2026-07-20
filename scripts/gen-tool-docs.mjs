@@ -24,28 +24,24 @@ const END = '<!-- TOOLS:END -->';
 
 // Toolsets in the order they should appear in the docs.
 const TOOLSET_ORDER = [
-  'identity',
+  'account',
   'reference',
   'catalog',
   'releases',
-  'review',
-  'analytics',
-  'accounting',
-  'delivery',
+  'insights',
+  'finance',
   'webhooks',
   'distribution',
 ];
 
 const TOOLSET_TITLES = {
-  identity: 'Identity',
+  account: 'Account',
   reference: 'Reference data',
-  catalog: 'Catalog (labels, artists, writers, publishers, releases, tracks, files)',
-  releases: 'Releases & tracks (draft lifecycle)',
-  review: 'Review & quality',
-  analytics: 'Analytics',
-  accounting: 'Accounting',
-  delivery: 'Delivery',
-  webhooks: 'Webhooks',
+  catalog: 'Catalog (labels, artists, writers, publishers, releases, tracks)',
+  releases: 'Releases (review, delivery, links, licenses, checks)',
+  insights: 'Insights (analytics & artificial streaming)',
+  finance: 'Finance (statements, transactions, royalties)',
+  webhooks: 'Webhooks (off by default — enable via LABELGRID_TOOLSETS)',
   distribution: 'Distribution (full writes)',
 };
 
@@ -56,18 +52,14 @@ const GATE_LABEL = {
 };
 
 const DIST_MODULES = [
-  ['../dist/tools/identity.js', 'identityTools'],
+  ['../dist/tools/account.js', 'accountTools'],
   ['../dist/tools/reference.js', 'referenceTools'],
-  ['../dist/tools/analytics.js', 'analyticsTools'],
-  ['../dist/tools/catalog-read.js', 'catalogReadTools'],
-  ['../dist/tools/files-read.js', 'filesReadTools'],
-  ['../dist/tools/review-read.js', 'reviewReadTools'],
-  ['../dist/tools/delivery.js', 'deliveryTools'],
-  ['../dist/tools/accounting.js', 'accountingTools'],
+  ['../dist/tools/catalog.js', 'catalogTools'],
+  ['../dist/tools/releases.js', 'releaseTools'],
+  ['../dist/tools/insights.js', 'insightsTools'],
+  ['../dist/tools/finance.js', 'financeTools'],
   ['../dist/tools/webhooks.js', 'webhookTools'],
-  ['../dist/tools/catalog-write.js', 'catalogWriteTools'],
-  ['../dist/tools/release-write.js', 'releaseWriteTools'],
-  ['../dist/tools/full-writes.js', 'fullWriteTools'],
+  ['../dist/tools/distribution.js', 'distributionTools'],
 ];
 
 async function loadTools() {

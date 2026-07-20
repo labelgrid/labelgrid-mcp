@@ -31,48 +31,44 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     path: '/labels',
     filtersDoc: 'label: no documented filters — paginate with page/per_page.',
     fieldsDoc:
-      'label — required: name (string), default_email (string); common optional: active, support_email, website_url, spotify_url, applemusic_url, default_copyright_name_p_line, default_copyright_name_c_line, isrc_base, enable_website, image.',
+      'label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base.',
     deleteNote:
-      'label: the API refuses to delete a label that still has releases — remove or reassign its releases first.',
+      'label: refused while the label still has releases — remove or reassign its releases first.',
   },
   artist: {
     path: '/artists',
     filtersDoc: 'artist: artist_name (filter by artist name).',
     fieldsDoc:
-      'artist — required: artist_name (string); common optional: full_name, email, location, bio_short, bio_full, isni, default_language, and platform profile URLs (spotify_url, applemusic_url, youtube_url, etc.).',
-    deleteNote:
-      'artist: the API refuses deletion when the artist is still referenced by releases or tracks.',
+      'artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs.',
+    deleteNote: 'artist: refused while still referenced by releases or tracks.',
   },
   writer: {
     path: '/writers',
     filtersDoc: 'writer: name (writer name), ipi (IPI number).',
     fieldsDoc:
-      'writer — required: first_name (string), last_name (string); common optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi).',
-    deleteNote: 'writer: the API refuses deletion when the writer is still referenced by tracks.',
+      'writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi).',
+    deleteNote: 'writer: refused while still referenced by tracks.',
   },
   publisher: {
     path: '/publishers',
     filtersDoc: 'publisher: name (publisher name), ipi (IPI number).',
-    fieldsDoc:
-      'publisher — required: name (string); common optional: ipi, pro, isni, controlled_publisher.',
-    deleteNote:
-      'publisher: the API refuses deletion when the publisher is still referenced by writers.',
+    fieldsDoc: 'publisher — required: name; optional: ipi, pro, isni, controlled_publisher.',
+    deleteNote: 'publisher: refused while still referenced by writers.',
   },
   release: {
     path: '/releases',
     filtersDoc:
       'release: label_id (owning label id), is_live (1 = live/distributed only), barcode_number (UPC/EAN), cat (catalog number).',
     fieldsDoc:
-      'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs). Once a release has been submitted or distributed some fields are locked: changing a locked field returns a 403 with code RELEASE_LOCKED_FIELDS, surfaced verbatim so you can see exactly which fields cannot be changed.',
-    deleteNote:
-      'release: only a draft that has never been submitted can be deleted; the API refuses to delete a release that has been submitted or distributed.',
+      'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs). Once submitted or distributed some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change.',
+    deleteNote: 'release: only a never-submitted draft can be deleted.',
   },
   track: {
     path: '/tracks',
     filtersDoc: 'track: release_id (one release’s tracks), isrc (filter by ISRC).',
     fieldsDoc:
-      'track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (a required ISO 3166-1 alpha-2 country code, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more. Some fields lock once the parent release is submitted or distributed.',
+      'track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more.',
     deleteNote:
-      'track: allowed while the parent release is an editable draft; the API refuses once the release is submitted or distributed.',
+      'track: allowed while the parent release is an editable draft; refused once submitted or distributed.',
   },
 };

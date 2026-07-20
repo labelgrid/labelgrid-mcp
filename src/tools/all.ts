@@ -1,32 +1,24 @@
 /** The complete tool catalog, in registration order. */
 
-import { accountingTools } from './accounting.js';
-import { analyticsTools } from './analytics.js';
-import { catalogReadTools } from './catalog-read.js';
-import { catalogWriteTools } from './catalog-write.js';
-import { deliveryTools } from './delivery.js';
-import { filesReadTools } from './files-read.js';
-import { fullWriteTools } from './full-writes.js';
-import { identityTools } from './identity.js';
+import { accountTools } from './account.js';
+import { catalogTools } from './catalog.js';
+import { distributionTools } from './distribution.js';
+import { financeTools } from './finance.js';
+import { insightsTools } from './insights.js';
 import { referenceTools } from './reference.js';
-import { releaseWriteTools } from './release-write.js';
-import { reviewReadTools } from './review-read.js';
+import { releaseTools } from './releases.js';
 import type { ToolDef } from './types.js';
 import { webhookTools } from './webhooks.js';
 
 export function allTools(): ToolDef[] {
   return [
-    ...identityTools,
+    ...accountTools,
     ...referenceTools,
-    ...analyticsTools,
-    ...catalogReadTools,
-    ...filesReadTools,
-    ...reviewReadTools,
-    ...deliveryTools,
-    ...accountingTools,
+    ...catalogTools,
+    ...releaseTools,
+    ...insightsTools,
+    ...financeTools,
     ...webhookTools,
-    ...catalogWriteTools,
-    ...releaseWriteTools,
-    ...fullWriteTools,
+    ...distributionTools,
   ];
 }

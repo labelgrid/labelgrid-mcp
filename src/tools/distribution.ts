@@ -48,7 +48,7 @@ const idempotencyKey = z
   .max(128)
   .optional()
   .describe(
-    'Optional idempotency key. The server deduplicates by this key for 24h — pass the SAME key when retrying a call whose outcome you did not observe. Without it, each call is a new operation.',
+    'The server deduplicates by this key for 24h — reuse the SAME key when retrying a call whose outcome you did not observe.',
   );
 
 /** Optional license metadata shared by the license upload/update actions. */
@@ -84,10 +84,11 @@ const uploadAsset: ToolDef = {
   gate: 'full_write',
   title: 'Upload a release/track asset',
   description:
-    'Upload a finalized track or release asset from a local file. `target` selects which asset; `id` is the track id for track_* targets and the release id for release_* targets. ' +
-    '`track_stereo` uploads the finalized stereo audio (WAV/FLAC/AIFF), `track_dolby` the Dolby Atmos audio (WAV), `track_lyrics` the lyrics (LRC) file — track files are uploaded directly to storage and then processed asynchronously; check their state with get_asset (mode info). Once a release is distributed the files are immutable — upload the correct master before distributing. ' +
-    "`release_cover_art` uploads or replaces the release's static cover art image — cover art is immutable once the release is distributed, so upload the final artwork before distributing. " +
-    '`release_motion_square` / `release_motion_tall` upload the finalized animated cover (motion artwork) video — the square or the tall/portrait cover video — uploaded directly to storage and then processed; check its state with get_asset (mode info). Upload the correct video before distributing — it is immutable once the release is live.',
+    'Upload a finalized track or release asset from a local file. `id` is the track id for track_* targets, the release id for release_*. ' +
+    '`track_stereo` (stereo audio, WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos, WAV) and `track_lyrics` (LRC) upload directly to storage and process asynchronously — check state with get_asset (mode info). ' +
+    "`release_cover_art` uploads or replaces the release's static cover art image. " +
+    '`release_motion_square` / `release_motion_tall` upload the animated cover (motion artwork) video — square or tall/portrait — also processed asynchronously. ' +
+    'ALL of these become immutable once the release is distributed — upload the final files before distributing.',
   inputShape: {
     target: z
       .enum([
@@ -138,7 +139,7 @@ const deleteAsset: ToolDef = {
   gate: 'full_write',
   title: 'Delete a release/track asset',
   description:
-    'Delete a track or release asset file. `target` track_stereo|track_dolby|track_lyrics deletes one of a track’s asset files (stereo, Dolby Atmos, or lyrics); release_motion_square|release_motion_tall deletes a release animated cover (motion artwork) video — the square or the tall/portrait cover video. Allowed only while the parent release is still an editable draft; the API refuses once the release is locked or distributed. Cover art has no delete endpoint and cannot be deleted here.',
+    'Delete a track or release asset file. track_stereo|track_dolby|track_lyrics delete a track asset; release_motion_square|release_motion_tall delete an animated cover (motion artwork) video. Allowed only while the parent release is still an editable draft; the API refuses once the release is locked or distributed. Cover art has no delete endpoint and cannot be deleted here.',
   inputShape: {
     target: z
       .enum([
@@ -172,27 +173,24 @@ const manageTrackLicense: ToolDef = {
   title: 'Manage a track license',
   description:
     'Manage the license documents attached to a track (for a cover or a cleared sample). Pick ONE action with `action`: ' +
-    "`upload` attaches a new license — `file_path` (the local license file) is required and `type` ('cover' or 'sample') selects the kind of license; optionally record license_id, license_provider, license_provider_name, and original_track_link. " +
-    '`update` replaces the file and/or metadata of an existing license — `track_license_id` (from list_track_licenses) and `file_path` are required; the same optional metadata applies. ' +
-    '`delete` permanently deletes a license and its file — `track_license_id` is required; this cannot be undone. ' +
+    "`upload` attaches a new license — `file_path` required, `type` ('cover' or 'sample') selects the kind; optionally record license_id, license_provider, license_provider_name, original_track_link. " +
+    '`update` replaces the file and/or metadata of an existing license — `track_license_id` (from list_track_licenses) and `file_path` required. ' +
+    '`delete` permanently deletes a license and its file — `track_license_id` required; cannot be undone. ' +
     'Licenses are immutability-governed once the release is live.',
   inputShape: {
-    action: z.enum(['upload', 'update', 'delete']).describe('Which license action to perform.'),
+    action: z.enum(['upload', 'update', 'delete']).describe('Which license action.'),
     track_id: z.number().int().positive().describe('The track id.'),
     track_license_id: z
       .number()
       .int()
       .positive()
       .optional()
-      .describe('The track license id (from list_track_licenses). Required for update/delete.'),
+      .describe('From list_track_licenses. Required for update/delete.'),
     file_path: z
       .string()
       .optional()
       .describe('Local path to the license file. Required for upload/update.'),
-    type: z
-      .enum(['cover', 'sample'])
-      .optional()
-      .describe('The kind of license: a cover or a sample license (upload).'),
+    type: z.enum(['cover', 'sample']).optional().describe('Kind of license (upload).'),
     ...licenseMeta,
   },
   annotations: { destructiveHint: true },
@@ -235,7 +233,7 @@ const distributeRelease: ToolDef = {
   gate: 'full_write',
   title: 'Distribute a release',
   description:
-    'Submit a release for distribution to the stores/outlets — this is the FINAL, consequential action that sends the release out; run_release_checks (check validate) should pass first. The server enforces your account’s weekly submission limit and returns a structured error if it is exceeded. Pass idempotency_key and reuse the SAME value if you retry a call whose outcome you did not observe — the server deduplicates by it for 24h; without a key each call is a new submission.',
+    'Submit a release for distribution to the stores/outlets — the FINAL, consequential action that sends the release out; run_release_checks (check validate) should pass first. The server enforces your account’s weekly submission limit and returns a structured error if exceeded. Pass idempotency_key and reuse the SAME value when retrying an unobserved call; without a key each call is a new submission.',
   inputShape: { release_id: releaseId, idempotency_key: idempotencyKey },
   annotations: { destructiveHint: true },
   handler: (args, { client }) =>
@@ -275,7 +273,7 @@ const enableBeatport: ToolDef = {
   gate: 'full_write',
   title: 'Request Beatport onboarding for a label',
   description:
-    'Request Beatport onboarding for a label. This is a one-time action that cannot be un-requested once submitted, so confirm the label is correct first.',
+    'Request Beatport onboarding for a label. A one-time action that cannot be un-requested, so confirm the label is correct first.',
   inputShape: { label_id: z.number().int().positive().describe('The label id.') },
   annotations: { destructiveHint: true },
   handler: (args, { client }) => client.post(`/labels/${args.label_id}/enable-beatport`),

@@ -20,7 +20,8 @@
     "lint": "biome check .",
     "leak-guard": "node scripts/leak-guard.mjs",
     "check-coverage": "node scripts/check-api-coverage.mjs",
-    "gen-docs": "node scripts/gen-tool-docs.mjs"
+    "gen-docs": "node scripts/gen-tool-docs.mjs",
+    "measure-tokens": "node scripts/measure-tool-tokens.mjs"
   },
   "repository": {
     "type": "git",

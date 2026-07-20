@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { LabelGridClient } from '../../src/api/http.js';
 import type { Config } from '../../src/config.js';
-import { analyticsTools } from '../../src/tools/analytics.js';
 import { referenceTools } from '../../src/tools/reference.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
@@ -82,61 +81,5 @@ describe('list_reference_data', () => {
   it('points clients at the MCP resources and names itself the fallback', () => {
     expect(tool.description).toContain('labelgrid://reference/{type}');
     expect(tool.description).toContain('fallback');
-  });
-});
-
-describe('get_analytics', () => {
-  const tool = byName(analyticsTools, 'get_analytics');
-
-  it('is a read tool in the analytics toolset, marked read-only', () => {
-    expect(tool.gate).toBe('read');
-    expect(tool.toolset).toBe('analytics');
-    expect(tool.annotations.readOnlyHint).toBe(true);
-  });
-
-  it('calls GET /analytics/summary with filtered dates and selected metrics', async () => {
-    const { fetchFn, ctx } = harness();
-    await tool.handler(
-      {
-        start_date: '2026-06-01',
-        end_date: '2026-06-30',
-        metrics: ['streams', 'saves'],
-        platform: 'SPOTIFY',
-        release_id: 42,
-        artist_names: ['Example Records'],
-      },
-      ctx,
-    );
-    const url = lastUrl(fetchFn);
-    expect(url).toContain('/analytics/summary');
-    expect(url).toContain('filter[start_date]=2026-06-01');
-    expect(url).toContain('filter[end_date]=2026-06-30');
-    expect(url).toContain('filter[platform]=SPOTIFY');
-    expect(url).toContain('filter[release_id]=42');
-    expect(url).toContain('filter[artist_names][]=Example Records');
-    expect(url).toContain('metrics[]=streams');
-    expect(url).toContain('metrics[]=saves');
-  });
-
-  it('requires start_date and end_date and validates the metrics enum', () => {
-    const schema = z.object(tool.inputShape);
-    expect(schema.safeParse({ end_date: '2026-06-30' }).success).toBe(false);
-    expect(schema.safeParse({ start_date: '2026-06-01', end_date: '2026-06-30' }).success).toBe(
-      true,
-    );
-    expect(
-      schema.safeParse({
-        start_date: '2026-06-01',
-        end_date: '2026-06-30',
-        metrics: ['not-a-metric'],
-      }).success,
-    ).toBe(false);
-    expect(
-      schema.safeParse({
-        start_date: '2026-06-01',
-        end_date: '2026-06-30',
-        metrics: ['completion-rate', 'streams-by-country'],
-      }).success,
-    ).toBe(true);
   });
 });
