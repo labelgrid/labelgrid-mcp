@@ -5,6 +5,14 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-16
+
+### Changed
+
+- API requests time out after 60 seconds (structured `TIMEOUT` error) and raw
+  transfers after 10 minutes — a hung call can no longer hang a tool.
+- CI and publish workflows install dependencies with `--ignore-scripts`.
+
 ## [0.2.1] - 2026-07-15
 
 ### Added
