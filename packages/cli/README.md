@@ -89,7 +89,7 @@ labelgrid catalog search --type release --filter label_id=123 --per-page 20
 
 ### `release` — the release lifecycle
 
-`validate <id>` (safe, repeatable), `distribute <id>` (final, confirmed), `takedown <id>` (final, confirmed), `confirm-review <id>`, `landing-config <id>`, `short-url <id>`
+`validate <id>` (safe, repeatable), `distribute <id>` (final, confirmed), `takedown <id>` (final, confirmed), `confirm-review <id>` (final, confirmed), `landing-config <id>`, `short-url <id>`
 
 ```bash
 labelgrid release validate 456
