@@ -40,7 +40,8 @@ function lastInit(fetchFn: ReturnType<typeof vi.fn>): RequestInit {
 describe('list_reference_data', () => {
   const tool = byName(referenceTools, 'list_reference_data');
 
-  it('is a read tool in the reference toolset, marked read-only', () => {
+  it('is the only reference tool, read-only in the reference toolset', () => {
+    expect(referenceTools.map((t) => t.name)).toEqual(['list_reference_data']);
     expect(tool.gate).toBe('read');
     expect(tool.toolset).toBe('reference');
     expect(tool.annotations.readOnlyHint).toBe(true);
@@ -54,7 +55,15 @@ describe('list_reference_data', () => {
     ['instruments', '/instruments'],
     ['distro_outlets', '/distro-outlets'],
     ['territories', '/territories'],
+    ['issue_definitions', '/issue-definitions'],
+    ['webhook_event_types', '/webhooks/event-types'],
   ];
+  it('serves exactly the nine datasets', () => {
+    const schema = z.object(tool.inputShape);
+    for (const [type] of cases) {
+      expect(schema.safeParse({ type }).success).toBe(true);
+    }
+  });
   for (const [type, path] of cases) {
     it(`maps type=${type} to GET ${path}`, async () => {
       const { fetchFn, ctx } = harness();
@@ -68,6 +77,11 @@ describe('list_reference_data', () => {
     const schema = z.object(tool.inputShape);
     expect(schema.safeParse({ type: 'nonsense' }).success).toBe(false);
     expect(schema.safeParse({ type: 'genres' }).success).toBe(true);
+  });
+
+  it('points clients at the MCP resources and names itself the fallback', () => {
+    expect(tool.description).toContain('labelgrid://reference/{type}');
+    expect(tool.description).toContain('fallback');
   });
 });
 
