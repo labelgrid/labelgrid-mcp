@@ -301,7 +301,59 @@ export class LabelGridClient {
     // A chunked/streamed response carries no Content-Length, so bound it AS we
     // read: accumulate chunks with a running byte counter and abort the moment
     // the counter crosses the ceiling — never buffering the whole oversized body.
-    let text: string;
+    // The request timeout keeps running while the body streams, so a read can
+    // also abort here — map that to the same structured TIMEOUT.
+    let text: string | { error: ApiError };
+    try {
+      text = await this.readBody(res, tooLarge as { error: ApiError });
+    } catch (err) {
+      if (
+        err instanceof DOMException &&
+        (err.name === 'TimeoutError' || err.name === 'AbortError')
+      ) {
+        return {
+          error: {
+            code: 'TIMEOUT',
+            message: `The request timed out after ${Math.round(this.timeoutMs / 1000)} seconds while reading the response. Try again, or narrow the request.`,
+            status: 0,
+          },
+        };
+      }
+      return {
+        error: {
+          code: 'NETWORK_ERROR',
+          message: err instanceof Error ? err.message : 'Reading the response failed.',
+          status: 0,
+        },
+      };
+    }
+    if (typeof text !== 'string') {
+      return text; // the bounded reader returned the too-large error result
+    }
+    let body: unknown = null;
+    if (text.length > 0) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
+    }
+
+    if (res.ok) {
+      return { data: body as T };
+    }
+    return { error: normalizeError(res, body) };
+  }
+
+  /**
+   * Reads a response body with the byte ceiling enforced mid-stream. Returns
+   * the decoded text, or the supplied too-large error result when the ceiling
+   * is crossed. Abort/timeout rejections propagate to the caller for mapping.
+   */
+  private async readBody(
+    res: Response,
+    tooLarge: { error: ApiError },
+  ): Promise<string | { error: ApiError }> {
     if (res.body) {
       const reader = res.body.getReader();
       const chunks: Uint8Array[] = [];
@@ -330,28 +382,15 @@ export class LabelGridClient {
         merged.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      text = new TextDecoder('utf-8').decode(merged);
-    } else {
-      // No readable stream (some test stubs) — fall back to text() and measure
-      // the true byte length as a backstop (multi-byte chars exceed char count).
-      text = await res.text();
-      if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
-        return tooLarge;
-      }
+      return new TextDecoder('utf-8').decode(merged);
     }
-    let body: unknown = null;
-    if (text.length > 0) {
-      try {
-        body = JSON.parse(text);
-      } catch {
-        body = text;
-      }
+    // No readable stream (some test stubs) — fall back to text() and measure
+    // the true byte length as a backstop (multi-byte chars exceed char count).
+    const text = await res.text();
+    if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
+      return tooLarge;
     }
-
-    if (res.ok) {
-      return { data: body as T };
-    }
-    return { error: normalizeError(res, body) };
+    return text;
   }
 
   get<T>(path: string, query?: Record<string, unknown>): Promise<ApiResult<T>> {
