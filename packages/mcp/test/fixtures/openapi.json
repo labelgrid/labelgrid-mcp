@@ -3950,7 +3950,7 @@
     "/review-issues": {
       "get": {
         "operationId": "public-review-issues.index",
-        "description": "Retrieve the list of user-visible review issues for a release.\nIssues are only returned when the release is in a state where the customer\nis the actor: `require_changes` or `rejected`. In all other states (draft,\nto_review, approved) the endpoint returns an empty array to avoid surfacing\npartially-evaluated issues mid-review.\n\nOnly user-visible issues are returned. Internal-only issues are never\nincluded regardless of the caller's permissions.\n\nEach issue carries its full conversation thread under `notes` — customer\nnotes (via POST /review-issues/{reviewReleaseIssue}/notes) and operator\nreplies in chronological order. `notes` is an empty array when none have\nbeen submitted.",
+        "description": "Retrieve the list of user-visible review issues for a release.\nIssues are only returned when the release is in a state where the customer\nis the actor: `require_changes` or `rejected`. In all other states (draft,\nto_review, approved) the endpoint returns an empty array to avoid surfacing\npartially-evaluated issues mid-review.\n\nReturns the issues visible on your release's review.\n\nEach issue carries its full conversation thread under `notes` — customer\nnotes (via POST /review-issues/{reviewReleaseIssue}/notes) and operator\nreplies in chronological order. `notes` is an empty array when none have\nbeen submitted.",
         "summary": "Get review issues for a release",
         "tags": [
           "Releases"
@@ -4163,7 +4163,7 @@
     "/review-issues/{reviewReleaseIssue}/notes": {
       "post": {
         "operationId": "public-review-issue-notes.store",
-        "description": "Attach a user-supplied note to a review release issue that is open for\ncustomer response. Each POST APPENDS a new note to the issue's conversation\nthread — prior notes are preserved, each keeping its own LLM verdict. The\nreturned id identifies the newly-created note.\n\nNotes can only be submitted when the release is in a state where the\ncustomer is the actor (`require_changes` or `draft`), the underlying\nissue is `confirmed`, and the issue definition allows user notes.\n\nAuthorization: the caller must be able to update the release that owns\nthis review issue. Only customer-surfaceable issues (exposure is\ncustomer_safe or submitter_visible) on the release's active review can\nreceive notes — internal-only issues and stale-review issues return 404 to\navoid leaking their existence.",
+        "description": "Attach a user-supplied note to a review release issue that is open for\ncustomer response. Each POST APPENDS a new note to the issue's conversation\nthread — prior notes are preserved, each keeping its own LLM verdict. The\nreturned id identifies the newly-created note.\n\nNotes can only be submitted when the release is in a state where the\ncustomer is the actor (`require_changes` or `draft`), the underlying\nissue is `confirmed`, and the issue definition allows user notes.\n\nAuthorization: the caller must be able to update the release that owns\nthis review issue. Notes can be added only to issues visible on the\nrelease's active review; anything else returns 404.",
         "summary": "Submit a note on a review issue",
         "tags": [
           "Releases"
@@ -4358,7 +4358,7 @@
     "/tracks/{track}/files/{fileType}/upload-url": {
       "post": {
         "operationId": "public-track-files.upload-url",
-        "description": "Generate a temporary presigned URL for direct file upload to S3.\n\n**Workflow:**\n1. Get presigned URL (this endpoint)\n2. Upload file to S3 using PUT request\n3. Create track file record with the returned key",
+        "description": "Generate a temporary presigned URL for direct file upload.\n\n**Workflow:**\n1. Get presigned URL (this endpoint)\n2. Upload the file to the presigned URL using a PUT request\n3. Create track file record with the returned key",
         "summary": "Get presigned upload URL",
         "tags": [
           "Track Files"
@@ -4468,7 +4468,7 @@
       },
       "put": {
         "operationId": "public-track-files.store",
-        "description": "Upload a new file for a track. If a file of the same asset type already exists, it will be replaced. Files are processed asynchronously and made available for distribution upon successful processing.\n\n**For stereo/dolby (choose one):**\n1. S3 upload: `{ \"s3_key\": \"uuid/song.wav\" }` - File is queued for async processing (202 Accepted)\n2. Remote URL: `{ \"source_url\": \"https://...\", \"checksum\": \"sha256\" }` - File is downloaded, then queued for transcoding (201 Created)\n\n**Supported audio formats:** WAV (16-, 24-, or 32-bit) or FLAC (16-bit only).\nHi-res FLAC sources (>16-bit) are rejected with 422 — upload WAV for hi-res delivery.\n\n**For lyrics (LRC only):**\n- S3 upload: `{ \"s3_key\": \"uuid/lyrics.lrc\" }` - LRC file is queued for processing (202 Accepted). Only `.lrc` format via `s3_key` is supported.\n\n**Note:** File is queued for processing. Check status via GET endpoint.",
+        "description": "Upload a new file for a track. If a file of the same asset type already exists, it will be replaced. Files are processed asynchronously and made available for distribution upon successful processing.\n\n**For stereo/dolby (choose one):**\n1. Presigned upload: `{ \"s3_key\": \"uuid/song.wav\" }` - File is queued for async processing (202 Accepted)\n2. Remote URL: `{ \"source_url\": \"https://...\", \"checksum\": \"sha256\" }` - File is downloaded, then queued for transcoding (201 Created)\n\n**Supported audio formats:** WAV (16-, 24-, or 32-bit) or FLAC (16-bit only).\nHi-res FLAC sources (>16-bit) are rejected with 422 — upload WAV for hi-res delivery.\n\n**For lyrics (LRC only):**\n- Presigned upload: `{ \"s3_key\": \"uuid/lyrics.lrc\" }` - LRC file is queued for processing (202 Accepted). Only `.lrc` format via `s3_key` is supported.\n\n**Note:** File is queued for processing. Check status via GET endpoint.",
         "summary": "Upload new file",
         "tags": [
           "Track Files"
@@ -6053,7 +6053,7 @@
     "/releases/{release}/files/{assetType}/upload-url": {
       "post": {
         "operationId": "public-release-files.upload-url",
-        "description": "Generate a temporary presigned URL for direct file upload to S3.\n\n**Workflow:**\n1. Get presigned URL (this endpoint)\n2. Upload file to S3 using PUT request\n3. Create release file record with the returned key",
+        "description": "Generate a temporary presigned URL for direct file upload.\n\n**Workflow:**\n1. Get presigned URL (this endpoint)\n2. Upload the file to the presigned URL using a PUT request\n3. Create release file record with the returned key",
         "summary": "Get presigned upload URL",
         "tags": [
           "Animated Covers"
@@ -7322,7 +7322,7 @@
                               },
                               "status_message": {
                                 "type": "string",
-                                "description": "Safe, enumerated reason code (transcode_complete / transcode_error\n/ transcode_incomplete). Never the raw statusMessage — internal\nexception text and S3/filesystem paths are deliberately excluded.",
+                                "description": "One of: transcode_complete, transcode_error, transcode_incomplete.",
                                 "const": "string"
                               },
                               "files": {
@@ -7926,7 +7926,7 @@
     "/tokens/current": {
       "delete": {
         "operationId": "public-tokens.revoke-current",
-        "description": "Revoke the personal access token presented on this request (self-revoke).\nThe same token stops authenticating on its very next request. Returns\n`422 NOT_REVOCABLE` when the acting credential is not a revocable\n`public_api` token (for example an internal sites token or a transient\ncredential).",
+        "description": "Revoke the personal access token presented on this request (self-revoke).\nThe same token stops authenticating on its very next request. Returns\n`422 NOT_REVOCABLE` when the acting credential is not a revocable\nAPI token.",
         "summary": "Revoke the current token",
         "tags": [
           "API Tokens"
@@ -7988,7 +7988,7 @@
     "/tokens/{tokenId}": {
       "delete": {
         "operationId": "public-tokens.revoke",
-        "description": "Revoke one of the caller's own `public_api` tokens by numeric id. The\noperation is idempotent — revoking an already-revoked owned token returns\n`200`. To avoid disclosing which token ids exist, a token that is\nnot found, not owned by the caller, or non-revocable (an internal sites\ntoken) all return an identical `404`.",
+        "description": "Revoke one of the caller's own `public_api` tokens by numeric id. The\noperation is idempotent — revoking an already-revoked owned token returns\n`200`. To avoid disclosing which token ids exist, a token that is\nnot found, not owned by the caller, or non-revocable all return an\nidentical `404`.",
         "summary": "Revoke a token by id",
         "tags": [
           "API Tokens"
@@ -9927,7 +9927,28 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "description": "The analytics data, keyed by section (each section is the same array the matching standalone endpoint returns as its `data`)."
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Query metadata for the summary (resolved date range, platform, scope, selected sections, and generation time)."
+                    },
+                    "availability": {
+                      "type": "object",
+                      "description": "Per-section availability for the selected platform, keyed by section. Present only when a platform filter is applied; each value indicates whether that metric is reported for the platform.",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "available",
+                          "not_available_for_platform"
+                        ]
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -10027,7 +10048,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10127,7 +10165,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10227,7 +10282,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10327,7 +10399,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10428,7 +10517,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10528,7 +10634,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10628,7 +10751,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10728,7 +10868,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10828,7 +10985,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -10928,7 +11102,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11028,7 +11219,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11128,7 +11336,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11228,7 +11453,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11328,7 +11570,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11429,7 +11688,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "description": "The analytics rows for this metric.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "availability": {
+                      "type": "string",
+                      "description": "Whether this metric is reported for the selected platform. Present only when a platform filter is applied; when it reads not_available_for_platform the platform does not report this metric and the data array is empty.",
+                      "enum": [
+                        "available",
+                        "not_available_for_platform"
+                      ]
+                    }
+                  }
                 }
               }
             }
@@ -11474,7 +11750,7 @@
     "/stream-radar/flags": {
       "get": {
         "operationId": "public-stream-radar.flags.index",
-        "description": "Retrieve a paginated list of the authenticated account's Stream Radar\nflags — a sanitized projection of streaming-detection findings for your\nreleases. Filter by status, severity, DSP, ISRC, release, and the\nlast-detected date range. Results are ordered by most recent detection.\n\nRequires Stream Radar to be enabled for the account\n(`403 stream_radar_not_enabled` otherwise).",
+        "description": "Retrieve a paginated list of the authenticated account's Stream Radar\nflags — the anomalous-streaming alerts raised on your releases. Filter by\nstatus, severity, DSP, ISRC, release, and the last-detected date range.\nResults are ordered by most recent detection.\n\nRequires Stream Radar to be enabled for the account\n(`403 stream_radar_not_enabled` otherwise).",
         "summary": "List Stream Radar flags",
         "tags": [
           "Stream Radar"
@@ -13060,7 +13336,7 @@
       },
       "FlagSeverity": {
         "type": "string",
-        "description": "Customer-facing severity band for a published Stream Radar flag. Three values only: the internal `critical` vocabulary collapses into `high` at the projection boundary and never reaches the customer.\n",
+        "description": "Severity band for a published Stream Radar flag: one of low, medium, high.\n",
         "enum": [
           "low",
           "medium",
@@ -15027,7 +15303,7 @@
       },
       "PublicReleaseDate": {
         "type": "object",
-        "description": "Public-API shape of a release date, used for both the create/update request\nand the release response.\n\nMirrors the per-region date fields. The optional public `exclude` flag maps\nto the internal stored `takedown` idiom: set `exclude: true` on a date set to\nexclude those `countries` from delivery (territory exclusion — \"release\n * worldwide except X, Y\"). On write the flag is validated as a boolean and then\ntranslated to the internal `takedown` key at the storage boundary (which\nbackdates the deal window); on read the persisted internal `takedown` is\nechoed back as `exclude`, so an excluded set round-trips faithfully. The\ninternal `takedown` name is never exposed on the public surface.",
+        "description": "Public-API shape of a release date, used for both the create/update request\nand the release response.\n\nMirrors the per-region date fields. Set `exclude: true` on a date set to\nexclude those `countries` from delivery (territory exclusion — \"release\n * worldwide except X, Y\"). The flag round-trips faithfully on read.",
         "properties": {
           "countries": {
             "type": "object",
@@ -15057,7 +15333,7 @@
               "null"
             ],
             "format": "date-time",
-            "description": "The date (or date-time) this territory set stops delivering — a\nscheduled per-territory takedown. Set a FUTURE value on a delivering\n(non-`exclude`) set to keep the release live now and end it on that\ndate; the value is emitted verbatim as the deal window's end. Distinct\nfrom `exclude: true`, which is an immediate territory exclusion. Must be\non or after `validity_period_start`; `end == start` (a closed window) is\nvalid. A value in the PAST is rejected with `422` on create; on update\nit is rejected too, unless every country in the set already carries that\nexact same persisted end (so echoing a naturally-elapsed end returned by\nGET back unchanged is accepted). Omit for an open-ended window",
+            "description": "The date (or date-time) this territory set stops delivering — a\nscheduled per-territory takedown. Set a FUTURE value on a delivering\n(non-`exclude`) set to keep the release live now and end it on that\ndate; the value is emitted verbatim as the delivery window's end. Distinct\nfrom `exclude: true`, which is an immediate territory exclusion. Must be\non or after `validity_period_start`; `end == start` (a closed window) is\nvalid. A value in the PAST is rejected with `422` on create; on update\nit is rejected too, unless every country in the set already carries that\nexact same persisted end (so echoing a naturally-elapsed end returned by\nGET back unchanged is accepted). Omit for an open-ended window",
             "examples": [
               "2025-05-23T00:00:00+00:00"
             ]
@@ -16360,14 +16636,6 @@
             "examples": [
               "2025-05-23T00:00:00+00:00"
             ]
-          },
-          "takedown": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "Internal-only takedown indicator (defaults to false), consumed by the\nvendor-XML deal-window generation. Not part of the public API: it is\nsilently dropped from create/update requests and omitted from the\nrelease response (see {@see PublicReleaseDate}). Take a release down\nvia dsp_configs + the distribute endpoint",
-            "default": false
           }
         },
         "required": [
@@ -19938,7 +20206,7 @@
           },
           "release_submission_limit": {
             "type": "string",
-            "description": "Single source of truth: the same computation the distribute\nenforcement path and internal users/current resource use. null\nwhen no cap applies; short-circuits before any query for\nuncapped users, so this adds zero cost on the common path."
+            "description": "Matches the enforcement applied when you submit a release for\ndistribution. null when no cap applies."
           },
           "terms_acceptance": {
             "type": "string",
