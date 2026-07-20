@@ -8,11 +8,12 @@
   "bin": {
     "labelgrid": "dist/index.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest run"
+    "test": "vitest run --exclude 'test/contract/**'",
+    "test:contract": "vitest run test/contract"
   },
   "repository": {
     "type": "git",
