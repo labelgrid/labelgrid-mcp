@@ -1,19 +1,20 @@
 /**
  * Sandbox smoke tests.
  *
- * These run only when LABELGRID_API_TOKEN is set (see the README/contract
- * workflow); they are skipped otherwise. They read the base URL and token from
- * the environment ONLY — no hostname, token, or account name is committed here.
- * Point them at the sandbox, never production.
+ * These run only when BOTH LABELGRID_API_TOKEN and LABELGRID_API_URL are set
+ * (see the README/contract workflow); they are skipped otherwise. They read
+ * the base URL and token from the environment ONLY — no hostname, token, or
+ * account name is committed here, and there is deliberately no fallback to
+ * the production base URL. Point them at the sandbox, never production.
  */
 
+import { LabelGridClient } from '@labelgrid/core';
+import type { ApiResult } from '@labelgrid/core';
 import { describe, expect, it } from 'vitest';
-import { LabelGridClient } from '../../src/api/http.js';
-import type { ApiResult } from '../../src/api/http.js';
 import type { Config } from '../../src/config.js';
-import { analyticsTools } from '../../src/tools/analytics.js';
-import { catalogReadTools } from '../../src/tools/catalog-read.js';
-import { identityTools } from '../../src/tools/identity.js';
+import { accountTools } from '../../src/tools/account.js';
+import { catalogTools } from '../../src/tools/catalog.js';
+import { insightsTools } from '../../src/tools/insights.js';
 import { referenceTools } from '../../src/tools/reference.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
@@ -58,9 +59,9 @@ function collection(r: ApiResult<unknown>): unknown[] {
   return [];
 }
 
-describe.skipIf(!TOKEN)('sandbox smoke', () => {
-  it('get_me returns the authenticated account', async () => {
-    const r = await tool(identityTools, 'get_me').handler({}, context());
+describe.skipIf(!TOKEN || !BASE_URL)('sandbox smoke', () => {
+  it('get_account (view profile) returns the authenticated account', async () => {
+    const r = await tool(accountTools, 'get_account').handler({ view: 'profile' }, context());
     const account = data(r);
     // The account envelope carries an id (possibly nested under `data`).
     const id =
@@ -68,8 +69,11 @@ describe.skipIf(!TOKEN)('sandbox smoke', () => {
     expect(id).toBeDefined();
   });
 
-  it('list_labels returns a paginated collection', async () => {
-    const r = await tool(catalogReadTools, 'list_labels').handler({ per_page: 5 }, context());
+  it('search_catalog (label) returns a paginated collection', async () => {
+    const r = await tool(catalogTools, 'search_catalog').handler(
+      { entity: 'label', per_page: 5 },
+      context(),
+    );
     expect('error' in r).toBe(false);
     expect(Array.isArray(collection(r))).toBe(true);
   });
@@ -86,7 +90,7 @@ describe.skipIf(!TOKEN)('sandbox smoke', () => {
     const end = new Date();
     const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
     const iso = (d: Date) => d.toISOString().slice(0, 10);
-    const r = await tool(analyticsTools, 'get_analytics').handler(
+    const r = await tool(insightsTools, 'get_analytics').handler(
       { start_date: iso(start), end_date: iso(end) },
       context(),
     );
@@ -95,8 +99,8 @@ describe.skipIf(!TOKEN)('sandbox smoke', () => {
   });
 
   it('a missing release normalizes to NOT_FOUND', async () => {
-    const r = await tool(catalogReadTools, 'get_release').handler(
-      { release_id: 999999999 },
+    const r = await tool(catalogTools, 'get_catalog_item').handler(
+      { entity: 'release', id: 999999999 },
       context(),
     );
     expect('error' in r && r.error.code).toBe('NOT_FOUND');

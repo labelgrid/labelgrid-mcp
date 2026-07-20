@@ -10,7 +10,7 @@
     "build:mcpb": "npm run build && node scripts/build-mcpb.mjs",
     "start": "node packages/mcp/dist/index.js",
     "test": "npm test -w @labelgrid/core && npm test -w @labelgrid/mcp && npm test -w @labelgrid/cli",
-    "test:contract": "npm run test:contract -w @labelgrid/mcp",
+    "test:contract": "npm run test:contract -w @labelgrid/mcp && npm run test:contract -w @labelgrid/cli",
     "lint": "biome check .",
     "leak-guard": "node scripts/leak-guard.mjs",
     "check-coverage": "node scripts/check-api-coverage.mjs",
