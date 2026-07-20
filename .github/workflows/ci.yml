@@ -31,3 +31,5 @@ jobs:
         run: npm run check-coverage
       - name: README tool-table drift
         run: node scripts/gen-tool-docs.mjs --check
+      - name: Tool-catalog token budget
+        run: npm run measure-tokens

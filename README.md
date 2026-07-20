@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40labelgrid%2Fmcp)](https://www.npmjs.com/package/@labelgrid/mcp) [![CI](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml) [![LabelGrid MCP server](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp/badges/score.svg)](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp)
 
-`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — it is a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
+`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — 30 consolidated tools forming a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
 
 ## Quickstart
 
@@ -88,144 +88,183 @@ All configuration is via environment variables in your client config.
 | `LABELGRID_ENABLE_FULL_WRITES` | `false` | Arm full writes — see [Safety model](#safety-model). Also requires the acknowledgment below. |
 | `LABELGRID_FULL_WRITES_ACK` | — | Must equal the exact acknowledgment sentence to arm full writes. |
 | `LABELGRID_READ_ONLY` | `false` | Force reads only; overrides both write flags. |
-| `LABELGRID_TOOLSETS` | all | Comma-separated subset of toolsets to expose. |
+| `LABELGRID_TOOLSETS` | all except `webhooks` | Comma-separated subset of toolsets to expose. |
 
-Valid toolsets: `identity`, `reference`, `catalog`, `releases`, `review`, `analytics`, `accounting`, `delivery`, `webhooks`, `distribution`.
+Valid toolsets (8): `account`, `reference`, `catalog`, `releases`, `insights`, `finance`, `webhooks`, `distribution`.
+
+- **`webhooks` is opt-in**: it is excluded from the default surface. Name it explicitly in `LABELGRID_TOOLSETS` (e.g. `LABELGRID_TOOLSETS=webhooks` or `catalog,releases,webhooks`) to enable the webhook tools.
+- **Legacy toolset names** from 0.2.x (`identity`, `review`, `delivery`, `analytics`, `accounting`) are still accepted in `LABELGRID_TOOLSETS` and map silently to their current toolset (`account`, `releases`, `releases`, `insights`, `finance`).
+
+The nine reference datasets are also exposed as MCP **resources** at `labelgrid://reference/{type}`; the `list_reference_data` tool serves the same data for clients that don't surface resources.
 
 ## Tool reference
 
 <!-- TOOLS:BEGIN -->
 
-_76 tools across 10 toolsets. This table is generated from the
+_30 tools across 8 toolsets. This table is generated from the
 tool definitions by `npm run gen-docs` — do not edit it by hand._
 
-### Identity `identity`
+### Account `account`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `get_me` | read | Return the authenticated LabelGrid account profile, including the release submission limit/quota and terms-acceptance status. Use this to confirm which account your API token belongs to before making other calls. |
+| `get_account` | read | Read the authenticated LabelGrid account. Pick ONE view with `view`: `profile` returns the account profile — including the release submission limit/quota and terms-acceptance status — use it to confirm which account your API token belongs to before making other calls; `balance` returns your accounting summary — current balance and related account-level financial totals. |
 | `revoke_api_token` | write | Revoke a LabelGrid API token. Pass token_id to revoke a specific token; omit it to revoke the token currently in use. WARNING: revoking the current token immediately ends this session — the server loses access and stops working until you configure a new token. |
 
 ### Reference data `reference`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `list_reference_data` | read | Fetch a LabelGrid reference dataset used to resolve the IDs and codes that catalog and release tools expect. Pick ONE dataset with `type`: `genres` and `genre_categories` (values for primary/secondary/tertiary genre IDs), `languages` (audio and metadata language codes), `contributor_roles` (valid role names for track contributors), `instruments`, `distro_outlets` (the distribution outlets/stores available to your account), `territories` (country/territory codes), `issue_definitions` (the catalog of review issue definitions — each code’s human-readable title, description, severity and whether it blocks distribution; issue codes are string slugs), or `webhook_event_types` (every available webhook event type with the schema of the payload it delivers — use it to decide which events to subscribe a webhook to). Call this before creating or updating a release or track when you need a valid ID or code. The same datasets are exposed as MCP resources at labelgrid://reference/{type}; this tool is the fallback for clients that don’t surface resources. |
+| `list_reference_data` | read | Fetch a LabelGrid reference dataset used to resolve the IDs and codes the catalog and release tools expect. Pick ONE dataset with `type`: `genres` and `genre_categories` (genre IDs), `languages` (audio/metadata language codes), `contributor_roles`, `instruments`, `distro_outlets` (the outlets/stores available to your account), `territories` (country codes), `issue_definitions` (each review issue code’s title, description, severity and whether it blocks distribution; codes are string slugs), or `webhook_event_types` (every webhook event type with its payload schema). Call this when you need a valid ID or code. The same datasets are exposed as MCP resources at labelgrid://reference/{type}; this tool is the fallback for clients that don’t surface resources. |
 
-### Catalog (labels, artists, writers, publishers, releases, tracks, files) `catalog`
-
-| Tool | Gate | Description |
-| --- | --- | --- |
-| `list_labels` | read | List the labels in your account, paginated. A label groups your releases and carries default copyright, website and outlet settings. Use get_label for the full detail of one label. |
-| `get_label` | read | Retrieve one label by id, including its settings and defaults. |
-| `list_artists` | read | List the artists in your account, paginated. Filter by `artist_name` to find a specific artist. Use get_artist for one artist’s full profile and links. |
-| `get_artist` | read | Retrieve one artist by id, including bio, identifiers and platform links. |
-| `list_writers` | read | List the songwriters in your account, paginated. Filter by `name` or `ipi`. Writers are attached to tracks for composition credits and royalty splits. |
-| `get_writer` | read | Retrieve one writer by id, including PRO/IPI identifiers and publisher link. |
-| `list_publishers` | read | List the publishers in your account, paginated. Filter by `name` or `ipi`. Publishers are linked to writers for publishing administration. |
-| `get_publisher` | read | Retrieve one publisher by id. |
-| `list_releases` | read | List releases in your account, paginated. Filter by `label_id`, `is_live` (1 = live/distributed), `barcode_number` (UPC/EAN), or `cat` (catalog number). Use get_release for one release’s full metadata and track listing. |
-| `get_release` | read | Retrieve one release by id, including its metadata, artwork state and track listing. |
-| `list_tracks` | read | List tracks in your account, paginated. Filter by `release_id` to list a release’s tracks, or by `isrc`. Use get_track for one track’s full metadata, credits and splits. |
-| `get_track` | read | Retrieve one track by id, including titles, contributors, writers, publishers and royalty splits. |
-| `get_track_file` | read | Retrieve metadata about one of a track’s asset files (its stereo audio, Dolby Atmos audio, or lyrics file), including its processing state. This returns file information, not the bytes — use get_track_audio_download_url for a downloadable link. |
-| `get_track_audio_download_url` | read | Return a time-limited, signed URL to download one of a track’s audio assets. `asset_type` selects the asset: audio_16, audio_24, and audio_32 are the WAV master at that bit depth; audio_preview_full and audio_preview_clip are the generated MP3 preview (full-length / clip). Returns { download_url, expires_in }; the URL expires roughly 10 minutes after it is issued, so request a fresh one when it lapses. Fetch the URL directly — do not send your API token to it. |
-| `list_track_licenses` | read | List the licenses attached to a track (e.g. cover/mechanical or sample clearances), paginated. |
-| `get_track_license` | read | Retrieve one license attached to a track by its license id. |
-| `get_release_file` | read | Retrieve metadata about a release animated cover (motion artwork) video asset — the square or the tall/portrait cover video — including its processing state. |
-| `create_label` | write | Create a new label. Pass its attributes in `fields`. |
-| `update_label` | write | Update a label. Supply only the fields you want to change in `fields`. |
-| `delete_label` | write | Delete a label. The API refuses to delete a label that still has releases — remove or reassign its releases first. |
-| `upload_label_image` | write | Upload a label image from a local file. `image_type` selects which asset: logo, logo-dark (a dark-mode variant), or background. `file_path` must be a local image file. |
-| `create_artist` | write | Create a new artist. Pass its attributes in `fields`. |
-| `update_artist` | write | Update an artist. Supply only the fields you want to change in `fields`. |
-| `delete_artist` | write | Delete an artist. The API refuses deletion when the artist is still referenced by releases or tracks. |
-| `upload_artist_photo` | write | Upload an artist photo from a local file. `file_path` must be a local image file. |
-| `create_writer` | write | Create a new songwriter. Pass its attributes in `fields`. |
-| `update_writer` | write | Update a writer. Supply only the fields you want to change in `fields`. |
-| `delete_writer` | write | Delete a writer. The API refuses deletion when the writer is still referenced by tracks. |
-| `create_publisher` | write | Create a new publisher. Pass its attributes in `fields`. |
-| `update_publisher` | write | Update a publisher. Supply only the fields you want to change in `fields`. |
-| `delete_publisher` | write | Delete a publisher. The API refuses deletion when the publisher is still referenced by writers. |
-
-### Releases & tracks (draft lifecycle) `releases`
+### Catalog (labels, artists, writers, publishers, releases, tracks) `catalog`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `create_release` | write | Create a new release in DRAFT state. Pass its metadata in `fields`. Required: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id. Pass idempotency_key and reuse the SAME value if you retry a call whose outcome you did not observe — the server deduplicates by it for 24h; without a key each call is a new operation. Add tracks with create_track, then validate_release before distributing. |
-| `update_release` | write | Update a release’s metadata. Supply only the fields you want to change in `fields`. Once a release has been submitted or distributed, some fields are locked: attempting to change a locked field returns a 403 with code RELEASE_LOCKED_FIELDS, surfaced verbatim so you can see exactly which fields cannot be changed. |
-| `delete_release` | write | Delete a release. The API only allows deleting a draft that has never been submitted; it refuses to delete a release that has been submitted or distributed. |
-| `create_track` | write | Create a track on a release. Pass its metadata in `fields`. Required: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (a required ISO 3166-1 alpha-2 country code, e.g. "US"). Pass idempotency_key and reuse the SAME value if you retry a call whose outcome you did not observe — the server deduplicates by it for 24h; without a key each call is a new operation. |
-| `update_track` | write | Update a track’s metadata. Supply only the fields you want to change in `fields`. As with releases, some fields lock once the parent release is submitted or distributed. |
-| `delete_track` | write | Delete a track. Allowed while the parent release is an editable draft; the API refuses once the release is submitted or distributed. |
-| `validate_release` | write | Run validation on a release and return any problems that would block distribution, as both a human-readable `errors` list and a machine-readable `errors_structured` list. This is a near-read check: it changes nothing and is safe to repeat. Run it before distributing. |
-| `refresh_quality_report` | write | Re-run the Preflight QC automated checks and refresh the release’s quality report. Read the results with get_quality_report. The server applies an hourly refresh budget, so frequent calls may be rate-limited. Preflight QC is an optional add-on. |
-| `update_landing_config` | write | Set the smart-link landing-page configuration for a release. `actions` uses the current (v2) action-list contract — each entry describes one call-to-action on the page. You can also set links_page_enabled, config_mode, page_style, custom_cta_text, custom_description, and pre_order_links. This replaces the landing configuration. |
-| `create_release_short_url` | write | Create (or return the existing) short URL for a release’s smart-link landing page. Safe to repeat. |
-| `add_review_issue_note` | write | Add a note to a release review issue — for example to explain a fix or add context for the reviewer. `review_issue_id` is the id of the issue (from list_review_issues). |
+| `search_catalog` | read | List catalog entities of one kind, paginated. Pick the kind with `entity`: label, artist, writer, publisher, release, or track. `filters` takes the endpoint’s own filter names, passed through verbatim — label: no documented filters — paginate with page/per_page. artist: artist_name (filter by artist name). writer: name (writer name), ipi (IPI number). publisher: name (publisher name), ipi (IPI number). release: label_id (owning label id), is_live (1 = live/distributed only), barcode_number (UPC/EAN), cat (catalog number). track: release_id (one release’s tracks), isrc (filter by ISRC). Use get_catalog_item for one entity's full detail. response_format:'detailed' returns the verbatim API response. |
+| `get_catalog_item` | read | Retrieve one catalog entity by id, with its full detail — a label’s settings, an artist’s identifiers and links, a writer’s PRO/IPI, a release’s metadata and track listing, a track’s contributors and royalty splits. Pick the kind with `entity`: label, artist, writer, publisher, release, or track. response_format:'detailed' returns the verbatim API response. |
+| `create_catalog_item` | write | Create a catalog entity. Pick the kind with `entity` and pass its attributes in `fields` — the API owns all validation. Required and common fields per entity: label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base. artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs. writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi). publisher — required: name; optional: ipi, pro, isni, controlled_publisher. release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs). Once submitted or distributed some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change. track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more. A release is created in DRAFT state — add tracks, then run the release checks before distributing. `idempotency_key` is honored for release and track only. |
+| `update_catalog_item` | write | Update a catalog entity. Pick the kind with `entity`, supply only the fields you want to change in `fields` (same field sets as create_catalog_item). For releases: once submitted or distributed, some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change. Track fields lock the same way once the parent release is submitted or distributed. |
+| `delete_catalog_item` | write | Delete a catalog entity by id. The API refuses deletes that would orphan data — label: refused while the label still has releases — remove or reassign its releases first. artist: refused while still referenced by releases or tracks. writer: refused while still referenced by tracks. publisher: refused while still referenced by writers. release: only a never-submitted draft can be deleted. track: allowed while the parent release is an editable draft; refused once submitted or distributed. |
+| `upload_image` | write | Upload a label image or an artist photo from a local file. `target`: label_logo, label_logo_dark (a dark-mode variant), label_background, or artist_photo. `id` is the label id for label_* and the artist id for artist_photo. `file_path` must be a local image file. |
+| `get_asset` | read | Read a track or release asset. Valid selector matrices: (1) mode='info', parent='track', asset stereo\|dolby\|lyrics — file metadata (not the bytes) incl. processing state. (2) mode='info', parent='release', asset square\|tall — animated cover (motion artwork) video metadata incl. processing state. (3) mode='download_url', parent='track', asset audio_16\|audio_24\|audio_32 (WAV master at that bit depth) or audio_preview_full\|audio_preview_clip (generated MP3 preview) — returns { download_url, expires_in }: a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. Any other combination has no endpoint and returns a structured error. mode defaults to info. |
 
-### Review & quality `review`
+### Releases (review, delivery, links, licenses, checks) `releases`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `list_review_issues` | read | List the review issues raised against a release during its automated quality checks. `release_id` is required. Each issue carries a code (see list_issue_definitions for what each code means), severity, and whether it blocks distribution. Use this to see what a customer must fix before a release can go out. |
-| `list_issue_definitions` | read | Retrieve the catalog of review issue definitions: each code’s human-readable title, description, severity and whether it blocks distribution. Use it to interpret the codes returned by list_review_issues and the quality report. Issue codes are string slugs. |
-| `get_quality_report` | read | Retrieve the Preflight QC quality report for a release: the customer-facing issues found by the automated checks so you can review them before confirming the release into distribution. Preflight QC is an optional add-on — if your account does not have it enabled the API returns a 403, which is surfaced verbatim. |
-| `list_stream_radar_flags` | read | List Stream Radar flags for your releases, paginated — early-warning flags from streaming-integrity monitoring that surface possible artificial-streaming activity so you can act early. Filter by status, severity, dsp, isrc, release_id, and the last-detected date range (detected_from/detected_to). Stream Radar is an optional add-on; without it the API returns a 403, surfaced verbatim. |
-| `get_stream_radar_flag` | read | Retrieve one Stream Radar flag by id, with its full detail. Stream Radar is an optional add-on; without it the API returns a 403, surfaced verbatim. |
+| `get_release_review` | read | Read a release's automated quality-check results. Pick ONE view with `view`: `issues` lists the review issues raised against the release — each carries a code (see list_reference_data type issue_definitions), severity, and whether it blocks distribution; use it to see what must be fixed before the release can go out. `quality_report` retrieves the Preflight QC quality report — the customer-facing issues found by the automated checks, to review before confirming the release into distribution; Preflight QC is an optional add-on — without it the API returns a 403, surfaced verbatim. response_format:'detailed' returns the verbatim API response. |
+| `get_delivery_queue` | read | List the distribution queue entries for your account, paginated — one entry per (release, outlet) delivery with its current status (e.g. pending review, processing, scheduled, complete, error) — where a release is in the delivery pipeline to each store. Filter by `release_id`, `outlet_id`, or `status`. response_format:'detailed' returns the verbatim API response. |
+| `get_landing_config` | read | Retrieve the smart-link landing-page configuration for a release: whether the links page is enabled, its style/mode, custom copy, the action list and any pre-order links. Pair with manage_release_links (action update_landing_config) to change it. |
+| `list_track_licenses` | read | List the licenses attached to a track (e.g. cover/mechanical or sample clearances), paginated. Pass `license_id` to retrieve one license by its id instead. |
+| `run_release_checks` | write | Run an automated check on a release. Pick ONE with `check`: `validate` returns any problems that would block distribution, as a human-readable `errors` list and a machine-readable `errors_structured` list — it changes nothing and is safe to repeat; run it before distributing. `refresh_quality_report` re-runs the Preflight QC checks and refreshes the quality report (read it with get_release_review view quality_report); the server applies an hourly refresh budget, so frequent calls may be rate-limited. Preflight QC is an optional add-on. |
+| `manage_release_links` | write | Manage a release's smart-link landing page. Pick ONE action with `action`: `update_landing_config` replaces the landing-page configuration with `config` (required for this action) — `config.actions` uses the current (v2) action-list contract (one entry per call-to-action); other keys: links_page_enabled, config_mode, page_style, custom_cta_text, custom_description, pre_order_links. `create_short_url` creates (or returns the existing) short URL for the release's smart-link landing page — safe to repeat. |
+| `add_review_issue_note` | write | Add a note to a release review issue — to explain a fix or add reviewer context. `review_issue_id` comes from get_release_review view issues. |
 
-### Analytics `analytics`
-
-| Tool | Gate | Description |
-| --- | --- | --- |
-| `get_analytics` | read | Retrieve a streaming analytics summary for your catalog in a single call. `start_date` and `end_date` (both YYYY-MM-DD) are required and the window is capped at 30 days by the server. Optionally narrow the result by `platform` (SPOTIFY, ITUNES, APPLE_MUSIC), `release_id`, `isrc`, `upc`, or `artist_names`. By default all 15 metric sections are returned; pass `metrics` to request only a subset. Available metrics: streams, listeners, saves, skips, shares, completion-rate, lyrics-view-rate, canvas-view-rate, device-split, source-split, saves-by-tier, streams-by-country, streams-by-gender, streams-by-age, shares-by-country. This endpoint is rate-limited (about 60 requests per minute); a 429 response carries retry_after_seconds. |
-
-### Accounting `accounting`
+### Insights (analytics & artificial streaming) `insights`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `list_statements` | read | List your royalty statements, paginated. Filter by label_id, release_id, isrc, upc, and a start_date/end_date range. Pass group_by="release" to roll the totals up per release. Use get_statement for one statement, or download_statement_csv for its line items. |
-| `get_statement` | read | Retrieve one royalty statement by its invoice number. |
-| `download_statement_csv` | read | Download statement line items as CSV. Pass invoice_number for a single statement, OR a start_date/end_date range to export across statements. If save_to_path (an absolute path whose parent directory exists) is given, the CSV is written there — an existing file is never overwritten (returns FILE_EXISTS) — and the tool returns the byte count. Otherwise the CSV is returned inline, truncated at 100KB (with truncated: true) — use save_to_path for large exports. |
-| `download_statement_invoice` | read | Download the invoice PDF for a statement. save_to_path is REQUIRED (the PDF is binary) and must be an absolute path whose parent directory exists; the PDF is written there — an existing file is never overwritten (returns FILE_EXISTS) — and the tool returns the byte count. |
-| `list_transactions` | read | List account transactions, paginated. Filter by label_id, release_id, isrc, upc, and a start_date/end_date range; sort with `sort`; pass group_by="release" to roll up per release. |
-| `get_royalties_breakdown` | read | Get a cursor-paginated royalty breakdown grouped by one or more dimensions. group_by is REQUIRED and is a comma-separated, ordered subset of: track, dsp, release, territory, period (e.g. "release,dsp"). Filter by label_id, release_id, isrc, upc, and a start_date/end_date range. |
-| `list_artificial_streams` | read | List the artificial-streaming records reported for your catalog, cursor-paginated — the per-record detail behind any artificial-streaming fee. Filter by dsp (spotify or apple), a start_date/end_date range, release_id, or isrc. |
-| `get_artificial_fee_breakdown` | read | Retrieve the per-release breakdown of an artificial-streaming fee for one billing period. `period` is the month in YYYY-MM format. |
-| `get_account_summary` | read | Retrieve your accounting summary — current balance and related account-level financial totals. |
+| `get_analytics` | read | Retrieve a streaming analytics summary for your catalog in a single call. `start_date` and `end_date` (both YYYY-MM-DD) are required and the window is capped at 30 days by the server. Optionally narrow the result by `platform` (SPOTIFY, ITUNES, APPLE_MUSIC), `release_id`, `isrc`, `upc`, or `artist_names`. By default all 15 metric sections are returned; pass `metrics` (see its enum) to request only a subset. Rate-limited (about 60 requests per minute); a 429 response carries retry_after_seconds. |
+| `query_artificial_streaming` | read | Query artificial-streaming (streaming-integrity) data for your catalog. Pick ONE view with `view`: `flags` lists Stream Radar early-warning flags surfacing possible artificial-streaming activity so you can act early, paginated — `filters`: status, severity, dsp, isrc, release_id, detected_from/detected_to (YYYY-MM-DD). `flag_detail` retrieves one flag by `flag_id` (required). Stream Radar is an optional add-on; without it the API returns a 403, surfaced verbatim. `records` lists the artificial-streaming records reported for your catalog, cursor-paginated — the per-record detail behind any artificial-streaming fee; `filters`: dsp (spotify or apple), start_date/end_date, release_id, isrc. `fee_breakdown` retrieves the per-release breakdown of an artificial-streaming fee for one billing period — `period` (required) is YYYY-MM. response_format:'detailed' returns the verbatim API response. |
 
-### Delivery `delivery`
+### Finance (statements, transactions, royalties) `finance`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `get_delivery_queue` | read | List the distribution queue entries for your account, paginated — one entry per (release, outlet) delivery with its current status (e.g. pending review, processing, scheduled, complete, error). Filter by `release_id`, `outlet_id`, or `status`. Use this to see where a release is in the delivery pipeline to each store. |
-| `get_landing_config` | read | Retrieve the smart-link landing-page configuration for a release: whether the links page is enabled, its style/mode, custom copy, the action list and any pre-order links. Pair with update_landing_config to change it. |
+| `query_financials` | read | Query your financial data. Pick ONE view with `view`: `statements` lists your royalty statements, paginated — `filters`: label_id, release_id, isrc, upc, start_date/end_date; group_by="release" rolls totals up per release. `statement_detail` retrieves one statement by `invoice_number` (required). `transactions` lists account transactions, paginated — same `filters`; sort with `sort`; group_by="release" rolls up per release. `royalty_breakdown` returns a cursor-paginated royalty breakdown — `group_by` is REQUIRED for this view: a comma-separated, ordered subset of: track, dsp, release, territory, period (e.g. "release,dsp"); same `filters`; pass `cursor` to page. Use download_statement for statement line items (CSV) or the invoice PDF. response_format:'detailed' returns the verbatim API response. |
+| `download_statement` | read | Download statement files. `format: 'csv'` downloads statement line items — pass invoice_number for one statement, OR a start_date/end_date range to export across statements; with save_to_path (an absolute path whose parent directory exists) the CSV is written there and the byte count returned; otherwise it is returned inline, truncated at 100KB (truncated: true) — use save_to_path for large exports. `format: 'invoice_pdf'` downloads the invoice PDF — invoice_number and save_to_path are both REQUIRED (the PDF is binary). An existing file is never overwritten (returns FILE_EXISTS). |
 
-### Webhooks `webhooks`
+### Webhooks (off by default — enable via LABELGRID_TOOLSETS) `webhooks`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `list_webhooks` | read | Read your webhook subscriptions. `view: 'config'` (the default) lists the webhook subscriptions configured on your account — each with its URL, subscribed events and active state — or retrieves one subscription when `webhook_id` is given. `view: 'logs'` retrieves the recent delivery log for a webhook (`webhook_id` required) — the attempts, response codes and outcomes — to debug why events did or did not reach your endpoint. |
-| `manage_webhook` | write | Manage a webhook subscription. Pick ONE action with `action`: `create` creates a subscription — pass `fields` with `name` (a label for this webhook), `url` (the HTTPS endpoint that will receive event deliveries) and `events` (the event subscription object selecting which event types this webhook receives — call list_reference_data type webhook_event_types for the available types and each payload shape); the API returns a signing secret once on creation — store it to verify incoming payloads. `update` updates a subscription — supply only the fields you want to change in `fields`: name, url, events, or is_active (set false to pause deliveries). `delete` deletes the subscription permanently — it will stop receiving events. `test` sends a test event to the webhook’s endpoint so you can confirm it is reachable and your signature verification works — safe to repeat. `rotate_secret` generates a new signing secret and returns it — WARNING: the old secret stops working immediately — update your endpoint’s signature verification with the new secret right away or deliveries will fail verification. `webhook_id` is required for every action except create. |
+| `list_webhooks` | read | Read your webhook subscriptions. `view: 'config'` (the default) lists the webhook subscriptions configured on your account — each with its URL, subscribed events and active state — or retrieves one subscription when `webhook_id` is given. `view: 'logs'` retrieves the recent delivery log for a webhook (`webhook_id` required) — attempts, response codes and outcomes — to debug why events did or did not reach your endpoint. |
+| `manage_webhook` | write | Manage a webhook subscription. Pick ONE action with `action`: `create` — pass `fields` with `name`, `url` (the HTTPS endpoint receiving deliveries) and `events` (the event subscription object — see list_reference_data type webhook_event_types); the API returns a signing secret ONCE on creation — store it to verify incoming payloads. `update` — supply only the fields to change in `fields`: name, url, events, or is_active (false pauses deliveries). `delete` — permanently removes the subscription; it stops receiving events. `test` — sends a test event to confirm reachability and signature verification; safe to repeat. `rotate_secret` — generates and returns a new signing secret — WARNING: the old secret stops working immediately; update your endpoint right away or deliveries will fail verification. `webhook_id` is required for every action except create. |
 
 ### Distribution (full writes) `distribution`
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `upload_track_audio` | full-write | Upload a finalized audio file (stereo WAV/FLAC or Dolby Atmos) or lyrics (LRC) file for a track. The file is uploaded directly to storage and then processed asynchronously; check its state with get_track_file. Once a release is distributed the file is immutable — upload the correct master before distributing. |
-| `delete_track_audio` | full-write | Delete one of a track’s asset files (stereo, Dolby Atmos, or lyrics). Allowed only while the parent release is still an editable draft; the API refuses once the release is locked or distributed. |
-| `upload_release_asset` | full-write | Upload a finalized animated cover (motion artwork) video for a release — the square or the tall/portrait cover video. The video is uploaded directly to storage and then processed; check its state with get_release_file. Upload the correct video before distributing — it is immutable once the release is live. For the static cover art image use upload_release_artwork. |
-| `delete_release_asset` | full-write | Delete a release animated cover (motion artwork) video — the square or the tall/portrait cover video. Allowed only while the release is still an editable draft. |
-| `upload_release_artwork` | full-write | Upload or replace the release’s static cover art image from a local file. Cover art is immutable once the release is distributed — upload the final artwork before distributing. |
-| `upload_track_license` | full-write | Attach a license document to a track (for a cover or a cleared sample). `file_path` is the local license file and `type` is "cover" or "sample". Optionally record license_id, license_provider, license_provider_name, and original_track_link. Licenses are immutability-governed once the release is live. |
-| `update_track_license` | full-write | Replace the file and/or metadata of an existing track license. `track_license_id` is the id of the license (from list_track_licenses); `file_path` is the license file to submit. Optionally update license_id, license_provider, license_provider_name, and original_track_link. |
-| `delete_track_license` | full-write | Permanently delete a track license and its file. `track_license_id` is the license id (from list_track_licenses). This cannot be undone. |
-| `distribute_release` | full-write | Submit a release for distribution to the stores/outlets — this is the FINAL, consequential action that sends the release out; validate_release should pass first. The server enforces your account’s weekly submission limit and returns a structured error if it is exceeded. Pass idempotency_key and reuse the SAME value if you retry a call whose outcome you did not observe — the server deduplicates by it for 24h; without a key each call is a new submission. |
+| `upload_asset` | full-write | Upload a finalized track or release asset from a local file. `id` is the track id for track_* targets, the release id for release_*. `track_stereo` (stereo audio, WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos, WAV) and `track_lyrics` (LRC) upload directly to storage and process asynchronously — check state with get_asset (mode info). `release_cover_art` uploads or replaces the release's static cover art image. `release_motion_square` / `release_motion_tall` upload the animated cover (motion artwork) video — square or tall/portrait — also processed asynchronously. ALL of these become immutable once the release is distributed — upload the final files before distributing. |
+| `delete_asset` | full-write | Delete a track or release asset file. track_stereo\|track_dolby\|track_lyrics delete a track asset; release_motion_square\|release_motion_tall delete an animated cover (motion artwork) video. Allowed only while the parent release is still an editable draft; the API refuses once the release is locked or distributed. Cover art has no delete endpoint and cannot be deleted here. |
+| `manage_track_license` | full-write | Manage the license documents attached to a track (for a cover or a cleared sample). Pick ONE action with `action`: `upload` attaches a new license — `file_path` required, `type` ('cover' or 'sample') selects the kind; optionally record license_id, license_provider, license_provider_name, original_track_link. `update` replaces the file and/or metadata of an existing license — `track_license_id` (from list_track_licenses) and `file_path` required. `delete` permanently deletes a license and its file — `track_license_id` required; cannot be undone. Licenses are immutability-governed once the release is live. |
+| `distribute_release` | full-write | Submit a release for distribution to the stores/outlets — the FINAL, consequential action that sends the release out; run_release_checks (check validate) should pass first. The server enforces your account’s weekly submission limit and returns a structured error if exceeded. Pass idempotency_key and reuse the SAME value when retrying an unobserved call; without a key each call is a new submission. |
 | `takedown_release` | full-write | Take a release down from ALL outlets/stores — a final, consequential action that removes it everywhere it was delivered. Re-distribution afterward is a fresh submission. |
 | `confirm_review` | full-write | Confirm a release that Preflight QC placed on hold, moving it into distribution review. Use after you have reviewed the quality report and accept the release as-is. Safe to repeat. |
-| `enable_beatport` | full-write | Request Beatport onboarding for a label. This is a one-time action that cannot be un-requested once submitted, so confirm the label is correct first. |
+| `enable_beatport` | full-write | Request Beatport onboarding for a label. A one-time action that cannot be un-requested, so confirm the label is correct first. |
 
 <!-- TOOLS:END -->
+
+## Migrating from 0.2.x
+
+Version 0.3.0 is a **breaking release**: the 83 per-endpoint tools were consolidated into 30 tools that select their target with an argument (`entity`, `view`, `action`, `check`, `format`, `target`, `type`). Every 0.2.x capability is preserved — the table below maps each old tool to its new call. Toolsets were regrouped into eight sets (legacy set names are still accepted as aliases in `LABELGRID_TOOLSETS`), and the `webhooks` toolset is now off by default.
+
+| Old tool (0.2.x) | New call (0.3.0) |
+| --- | --- |
+| `get_me` | `get_account` (`view: 'profile'`) |
+| `get_account_summary` | `get_account` (`view: 'balance'`) |
+| `revoke_api_token` | `revoke_api_token` (unchanged) |
+| `list_reference_data` | `list_reference_data` (now 9 `type` values) |
+| `list_issue_definitions` | `list_reference_data` (`type: 'issue_definitions'`) |
+| `list_webhook_event_types` | `list_reference_data` (`type: 'webhook_event_types'`) |
+| `list_labels` | `search_catalog` (`entity: 'label'`) |
+| `list_artists` | `search_catalog` (`entity: 'artist'`) |
+| `list_writers` | `search_catalog` (`entity: 'writer'`) |
+| `list_publishers` | `search_catalog` (`entity: 'publisher'`) |
+| `list_releases` | `search_catalog` (`entity: 'release'`) |
+| `list_tracks` | `search_catalog` (`entity: 'track'`) |
+| `get_label` | `get_catalog_item` (`entity: 'label'`) |
+| `get_artist` | `get_catalog_item` (`entity: 'artist'`) |
+| `get_writer` | `get_catalog_item` (`entity: 'writer'`) |
+| `get_publisher` | `get_catalog_item` (`entity: 'publisher'`) |
+| `get_release` | `get_catalog_item` (`entity: 'release'`) |
+| `get_track` | `get_catalog_item` (`entity: 'track'`) |
+| `create_label` | `create_catalog_item` (`entity: 'label'`) |
+| `create_artist` | `create_catalog_item` (`entity: 'artist'`) |
+| `create_writer` | `create_catalog_item` (`entity: 'writer'`) |
+| `create_publisher` | `create_catalog_item` (`entity: 'publisher'`) |
+| `create_release` | `create_catalog_item` (`entity: 'release'`) |
+| `create_track` | `create_catalog_item` (`entity: 'track'`) |
+| `update_label` | `update_catalog_item` (`entity: 'label'`) |
+| `update_artist` | `update_catalog_item` (`entity: 'artist'`) |
+| `update_writer` | `update_catalog_item` (`entity: 'writer'`) |
+| `update_publisher` | `update_catalog_item` (`entity: 'publisher'`) |
+| `update_release` | `update_catalog_item` (`entity: 'release'`) |
+| `update_track` | `update_catalog_item` (`entity: 'track'`) |
+| `delete_label` | `delete_catalog_item` (`entity: 'label'`) |
+| `delete_artist` | `delete_catalog_item` (`entity: 'artist'`) |
+| `delete_writer` | `delete_catalog_item` (`entity: 'writer'`) |
+| `delete_publisher` | `delete_catalog_item` (`entity: 'publisher'`) |
+| `delete_release` | `delete_catalog_item` (`entity: 'release'`) |
+| `delete_track` | `delete_catalog_item` (`entity: 'track'`) |
+| `upload_label_image` | `upload_image` (`target: 'label_logo'` \| `'label_logo_dark'` \| `'label_background'`) |
+| `upload_artist_photo` | `upload_image` (`target: 'artist_photo'`) |
+| `get_track_file` | `get_asset` (`parent: 'track'`, `mode: 'info'`, `asset: 'stereo'` \| `'dolby'` \| `'lyrics'`) |
+| `get_release_file` | `get_asset` (`parent: 'release'`, `mode: 'info'`, `asset: 'square'` \| `'tall'`) |
+| `get_track_audio_download_url` | `get_asset` (`parent: 'track'`, `mode: 'download_url'`, `asset: 'audio_16'` \| `'audio_24'` \| `'audio_32'` \| `'audio_preview_full'` \| `'audio_preview_clip'`) |
+| `list_track_licenses` | `list_track_licenses` (unchanged) |
+| `get_track_license` | `list_track_licenses` (`license_id: …`) |
+| `list_review_issues` | `get_release_review` (`view: 'issues'`) |
+| `get_quality_report` | `get_release_review` (`view: 'quality_report'`) |
+| `list_stream_radar_flags` | `query_artificial_streaming` (`view: 'flags'`) |
+| `get_stream_radar_flag` | `query_artificial_streaming` (`view: 'flag_detail'`, `flag_id: …`) |
+| `list_artificial_streams` | `query_artificial_streaming` (`view: 'records'`) |
+| `get_artificial_fee_breakdown` | `query_artificial_streaming` (`view: 'fee_breakdown'`, `period: 'YYYY-MM'`) |
+| `get_analytics` | `get_analytics` (unchanged) |
+| `get_delivery_queue` | `get_delivery_queue` (unchanged) |
+| `get_landing_config` | `get_landing_config` (unchanged) |
+| `list_statements` | `query_financials` (`view: 'statements'`) |
+| `get_statement` | `query_financials` (`view: 'statement_detail'`, `invoice_number: …`) |
+| `list_transactions` | `query_financials` (`view: 'transactions'`) |
+| `get_royalties_breakdown` | `query_financials` (`view: 'royalty_breakdown'`, `group_by: …`) |
+| `download_statement_csv` | `download_statement` (`format: 'csv'`) |
+| `download_statement_invoice` | `download_statement` (`format: 'invoice_pdf'`) |
+| `list_webhooks` | `list_webhooks` (`view: 'config'`, the default) |
+| `get_webhook` | `list_webhooks` (`view: 'config'`, `webhook_id: …`) |
+| `get_webhook_logs` | `list_webhooks` (`view: 'logs'`, `webhook_id: …`) |
+| `create_webhook` | `manage_webhook` (`action: 'create'`) |
+| `update_webhook` | `manage_webhook` (`action: 'update'`) |
+| `delete_webhook` | `manage_webhook` (`action: 'delete'`) |
+| `test_webhook` | `manage_webhook` (`action: 'test'`) |
+| `rotate_webhook_secret` | `manage_webhook` (`action: 'rotate_secret'`) |
+| `validate_release` | `run_release_checks` (`check: 'validate'`) |
+| `refresh_quality_report` | `run_release_checks` (`check: 'refresh_quality_report'`) |
+| `update_landing_config` | `manage_release_links` (`action: 'update_landing_config'`, `config: …`) |
+| `create_release_short_url` | `manage_release_links` (`action: 'create_short_url'`) |
+| `add_review_issue_note` | `add_review_issue_note` (unchanged) |
+| `upload_track_audio` | `upload_asset` (`target: 'track_stereo'` \| `'track_dolby'` \| `'track_lyrics'`) |
+| `upload_release_artwork` | `upload_asset` (`target: 'release_cover_art'`) |
+| `upload_release_asset` | `upload_asset` (`target: 'release_motion_square'` \| `'release_motion_tall'`) |
+| `delete_track_audio` | `delete_asset` (`target: 'track_stereo'` \| `'track_dolby'` \| `'track_lyrics'`) |
+| `delete_release_asset` | `delete_asset` (`target: 'release_motion_square'` \| `'release_motion_tall'`) |
+| `upload_track_license` | `manage_track_license` (`action: 'upload'`) |
+| `update_track_license` | `manage_track_license` (`action: 'update'`, `track_license_id: …`) |
+| `delete_track_license` | `manage_track_license` (`action: 'delete'`, `track_license_id: …`) |
+| `distribute_release` | `distribute_release` (unchanged) |
+| `takedown_release` | `takedown_release` (unchanged) |
+| `confirm_review` | `confirm_review` (unchanged) |
+| `enable_beatport` | `enable_beatport` (unchanged) |
 
 ## Safety model
 

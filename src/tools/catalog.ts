@@ -22,9 +22,7 @@ import type { ToolDef } from './types.js';
 /** Accepted image extensions for the catalog image uploads. */
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'];
 
-const entityArg = z
-  .enum(ENTITY_NAMES)
-  .describe('Which catalog entity: label, artist, writer, publisher, release, or track.');
+const entityArg = z.enum(ENTITY_NAMES).describe('The catalog entity kind.');
 
 const idArg = z.number().int().positive().describe('The entity id.');
 
@@ -32,7 +30,7 @@ const responseFormat = z
   .enum(['concise', 'detailed'])
   .optional()
   .describe(
-    "Response shape: 'concise' (default) projects the response down to the high-signal fields (ids are always kept); 'detailed' returns the verbatim API response.",
+    "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
   );
 
 /** A permissive body of API fields, forwarded verbatim to the endpoint. */
@@ -47,7 +45,7 @@ const idempotencyKey = z
   .max(128)
   .optional()
   .describe(
-    'Optional idempotency key, honored for entity release and track only. The server deduplicates by this key for 24h — pass the SAME key when retrying a call whose outcome you did not observe. Without it, each call is a new operation. Ignored for other entities.',
+    'Honored for release and track only: the server deduplicates by this key for 24h — reuse the SAME key when retrying an unobserved call. Ignored for other entities.',
   );
 
 /** Rejects a path that is not an existing regular file, before any HTTP call. */
@@ -72,7 +70,7 @@ const searchCatalog: ToolDef = {
   toolset: 'catalog',
   gate: 'read',
   title: 'Search the catalog',
-  description: `List catalog entities of one kind, paginated. Pick the kind with \`entity\`: label, artist, writer, publisher, release, or track. \`filters\` takes the endpoint’s own documented filter names, passed through verbatim — ${entityDoc(
+  description: `List catalog entities of one kind, paginated. Pick the kind with \`entity\`: label, artist, writer, publisher, release, or track. \`filters\` takes the endpoint’s own filter names, passed through verbatim — ${entityDoc(
     (s) => s.filtersDoc,
   )} Use get_catalog_item for one entity's full detail. response_format:'detailed' returns the verbatim API response.`,
   inputShape: {
@@ -80,7 +78,7 @@ const searchCatalog: ToolDef = {
     filters: z
       .record(z.string(), z.unknown())
       .optional()
-      .describe('The endpoint’s documented filter names → values, passed through verbatim.'),
+      .describe('Filter names → values, passed through verbatim.'),
     page: z.number().int().positive().optional().describe('1-based page number.'),
     per_page: z.number().int().positive().optional().describe('Items per page.'),
     response_format: responseFormat,
@@ -103,7 +101,7 @@ const getCatalogItem: ToolDef = {
   gate: 'read',
   title: 'Get a catalog item',
   description:
-    'Retrieve one catalog entity by id, with its full detail: a label’s settings and defaults, an artist’s bio/identifiers/platform links, a writer’s PRO/IPI identifiers and publisher link, a publisher, a release’s metadata/artwork state/track listing, or a track’s titles, contributors, writers, publishers and royalty splits. ' +
+    'Retrieve one catalog entity by id, with its full detail — a label’s settings, an artist’s identifiers and links, a writer’s PRO/IPI, a release’s metadata and track listing, a track’s contributors and royalty splits. ' +
     "Pick the kind with `entity`: label, artist, writer, publisher, release, or track. response_format:'detailed' returns the verbatim API response.",
   inputShape: {
     entity: entityArg,
@@ -125,10 +123,10 @@ const createCatalogItem: ToolDef = {
   title: 'Create a catalog item',
   description: `Create a catalog entity. Pick the kind with \`entity\` and pass its attributes in \`fields\` — the API owns all validation. Required and common fields per entity: ${entityDoc(
     (s) => s.fieldsDoc,
-  )} A release is created in DRAFT state — add tracks, then run the release checks before distributing. \`idempotency_key\` is honored for entity release and track (the server deduplicates by it for 24h); it is ignored for other entities. See the API docs for the full field lists.`,
+  )} A release is created in DRAFT state — add tracks, then run the release checks before distributing. \`idempotency_key\` is honored for release and track only.`,
   inputShape: {
     entity: entityArg,
-    fields: fieldsBody('The entity attributes, forwarded verbatim to the API.'),
+    fields: fieldsBody('The entity attributes, forwarded verbatim.'),
     idempotency_key: idempotencyKey,
   },
   annotations: {},
@@ -154,11 +152,11 @@ const updateCatalogItem: ToolDef = {
   title: 'Update a catalog item',
   description:
     'Update a catalog entity. Pick the kind with `entity`, supply only the fields you want to change in `fields` (same field sets as create_catalog_item). ' +
-    'For releases: once submitted or distributed, some fields are locked — changing a locked field returns a 403 with code RELEASE_LOCKED_FIELDS, surfaced verbatim so you can see exactly which fields cannot be changed. Track fields lock the same way once the parent release is submitted or distributed.',
+    'For releases: once submitted or distributed, some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change. Track fields lock the same way once the parent release is submitted or distributed.',
   inputShape: {
     entity: entityArg,
     id: idArg,
-    fields: fieldsBody('The entity fields to change, forwarded verbatim to the API.'),
+    fields: fieldsBody('The fields to change, forwarded verbatim.'),
   },
   annotations: { idempotentHint: true },
   handler: (args, { client }) => {
@@ -196,7 +194,7 @@ const uploadImage: ToolDef = {
   gate: 'safe_write',
   title: 'Upload a catalog image',
   description:
-    'Upload a label image or an artist photo from a local file. `target` selects which asset: label_logo, label_logo_dark (a dark-mode variant), or label_background upload a label image; artist_photo uploads an artist photo. `id` is the label id for label_* targets and the artist id for artist_photo. `file_path` must be a local image file.',
+    'Upload a label image or an artist photo from a local file. `target`: label_logo, label_logo_dark (a dark-mode variant), label_background, or artist_photo. `id` is the label id for label_* and the artist id for artist_photo. `file_path` must be a local image file.',
   inputShape: {
     target: z
       .enum(['label_logo', 'label_logo_dark', 'label_background', 'artist_photo'])
@@ -244,13 +242,13 @@ const getAsset: ToolDef = {
   gate: 'read',
   title: 'Get an asset',
   description:
-    'Read a track or release asset. Three selector matrices are supported. ' +
-    "(1) mode='info', parent='track', asset stereo|dolby|lyrics — metadata about one of a track's asset files (its stereo audio, Dolby Atmos audio, or lyrics file), including its processing state; this returns file information, not the bytes. " +
-    "(2) mode='info', parent='release', asset square|tall — metadata about a release animated cover (motion artwork) video, the square or the tall/portrait cover video, including its processing state. " +
-    "(3) mode='download_url', parent='track', asset audio_16|audio_24|audio_32 (the WAV master at that bit depth) or audio_preview_full|audio_preview_clip (the generated MP3 preview, full-length / clip) — returns { download_url, expires_in }: a time-limited, signed URL that expires roughly 10 minutes after it is issued, so request a fresh one when it lapses; fetch the URL directly — do not send your API token to it. " +
+    'Read a track or release asset. Valid selector matrices: ' +
+    "(1) mode='info', parent='track', asset stereo|dolby|lyrics — file metadata (not the bytes) incl. processing state. " +
+    "(2) mode='info', parent='release', asset square|tall — animated cover (motion artwork) video metadata incl. processing state. " +
+    "(3) mode='download_url', parent='track', asset audio_16|audio_24|audio_32 (WAV master at that bit depth) or audio_preview_full|audio_preview_clip (generated MP3 preview) — returns { download_url, expires_in }: a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. " +
     'Any other combination has no endpoint and returns a structured error. mode defaults to info.',
   inputShape: {
-    parent: z.enum(['track', 'release']).describe('Whose asset: a track’s or a release’s.'),
+    parent: z.enum(['track', 'release']).describe('Whose asset.'),
     id: z.number().int().positive().describe('The track id or release id, per `parent`.'),
     asset: z
       .enum([
@@ -265,7 +263,7 @@ const getAsset: ToolDef = {
         'audio_preview_full',
         'audio_preview_clip',
       ])
-      .describe('Which asset — see the description for which assets pair with which parent/mode.'),
+      .describe('Which asset — see the description for the valid parent/mode pairings.'),
     mode: z
       .enum(['info', 'download_url'])
       .optional()

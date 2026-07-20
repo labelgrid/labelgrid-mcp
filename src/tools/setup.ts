@@ -46,7 +46,7 @@ const SETUP_GUIDE = {
   optional_settings: [
     'LABELGRID_ENABLE_WRITES — safe draft-stage writes; on by default, set false for read-only (see the README Safety section).',
     'LABELGRID_ENABLE_FULL_WRITES (plus LABELGRID_FULL_WRITES_ACK) — arm consequential distribution actions; off by default (see the README Safety section).',
-    'LABELGRID_TOOLSETS — expose only a comma-separated subset of toolsets (see the README Safety section).',
+    'LABELGRID_TOOLSETS — expose only a comma-separated subset of toolsets: account, reference, catalog, releases, insights, finance, webhooks, distribution (pre-0.3.0 names are still accepted as aliases). The webhooks toolset is off by default — name it explicitly here to enable it (see the README Configuration section).',
     'LABELGRID_READ_ONLY — force reads only, overriding the write flags (see the README Safety section).',
   ],
 } as const;

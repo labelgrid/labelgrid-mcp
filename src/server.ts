@@ -12,10 +12,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { ApiResult, LabelGridClient } from './api/http.js';
-import type { Config } from './config.js';
+import { type Config, defaultExcludedToolsets } from './config.js';
 import { isToolEnabled } from './gating.js';
 import { DATA_HANDLING_NOTE, FULL_WRITES_NOTICE, LEGAL_SUMMARY } from './legal.js';
 import { log } from './log.js';
+import { registerReferenceResources } from './resources.js';
 import { setupTools } from './tools/setup.js';
 import { type ToolDef, toToolResult } from './tools/types.js';
 import { VERSION } from './version.js';
@@ -61,10 +62,14 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
   for (const tool of registered) {
     const isSetupHelper = tool.toolset === 'setup';
     // Listing rule: connected mode applies the full gate matrix; setup mode
-    // lists the whole catalog (only honoring an explicit toolset narrowing),
-    // because nothing can execute without a token anyway.
+    // lists the whole catalog (honoring an explicit toolset narrowing, and
+    // otherwise the same default exclusion the connected surface applies — so
+    // the advertised surface matches reality), because nothing can execute
+    // without a token anyway.
     const listable = config.setupMode
-      ? config.toolsets === null || config.toolsets.has(tool.toolset)
+      ? config.toolsets === null
+        ? !defaultExcludedToolsets.has(tool.toolset)
+        : config.toolsets.has(tool.toolset)
       : isToolEnabled(tool, config);
     if (!isSetupHelper && !listable) continue;
 
@@ -115,6 +120,10 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
       },
     );
   }
+
+  // The nine labelgrid://reference/{type} resources are registered in every
+  // mode; in setup mode their reads return NOT_CONNECTED guidance.
+  registerReferenceResources(server, config, client);
 
   return server;
 }

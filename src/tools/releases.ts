@@ -18,7 +18,7 @@ const responseFormat = z
   .enum(['concise', 'detailed'])
   .optional()
   .describe(
-    "Response shape: 'concise' (default) projects the response down to the high-signal fields (ids are always kept); 'detailed' returns the verbatim API response.",
+    "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
   );
 
 const getReleaseReview: ToolDef = {
@@ -28,14 +28,12 @@ const getReleaseReview: ToolDef = {
   title: 'Get release review results',
   description:
     "Read a release's automated quality-check results. Pick ONE view with `view`: " +
-    '`issues` lists the review issues raised against the release during its automated quality checks — each issue carries a code (see list_reference_data type issue_definitions for what each code means), severity, and whether it blocks distribution; use it to see what a customer must fix before a release can go out. ' +
-    '`quality_report` retrieves the Preflight QC quality report — the customer-facing issues found by the automated checks so you can review them before confirming the release into distribution; Preflight QC is an optional add-on — if your account does not have it enabled the API returns a 403, which is surfaced verbatim. ' +
+    '`issues` lists the review issues raised against the release — each carries a code (see list_reference_data type issue_definitions), severity, and whether it blocks distribution; use it to see what must be fixed before the release can go out. ' +
+    '`quality_report` retrieves the Preflight QC quality report — the customer-facing issues found by the automated checks, to review before confirming the release into distribution; Preflight QC is an optional add-on — without it the API returns a 403, surfaced verbatim. ' +
     "response_format:'detailed' returns the verbatim API response.",
   inputShape: {
     release_id: releaseId,
-    view: z
-      .enum(['issues', 'quality_report'])
-      .describe('Which review read: issues (review issues) or quality_report (Preflight QC).'),
+    view: z.enum(['issues', 'quality_report']).describe('Which review read.'),
     response_format: responseFormat,
   },
   annotations: { readOnlyHint: true },
@@ -54,7 +52,7 @@ const getDeliveryQueue: ToolDef = {
   gate: 'read',
   title: 'Get the distribution queue',
   description:
-    'List the distribution queue entries for your account, paginated — one entry per (release, outlet) delivery with its current status (e.g. pending review, processing, scheduled, complete, error). Filter by `release_id`, `outlet_id`, or `status`. Use this to see where a release is in the delivery pipeline to each store. ' +
+    'List the distribution queue entries for your account, paginated — one entry per (release, outlet) delivery with its current status (e.g. pending review, processing, scheduled, complete, error) — where a release is in the delivery pipeline to each store. Filter by `release_id`, `outlet_id`, or `status`. ' +
     "response_format:'detailed' returns the verbatim API response.",
   inputShape: {
     release_id: z.number().int().positive().optional().describe('Filter to one release.'),
@@ -128,13 +126,11 @@ const runReleaseChecks: ToolDef = {
   title: 'Run release checks',
   description:
     'Run an automated check on a release. Pick ONE with `check`: ' +
-    '`validate` runs validation and returns any problems that would block distribution, as both a human-readable `errors` list and a machine-readable `errors_structured` list — a near-read check: it changes nothing and is safe to repeat; run it before distributing. ' +
-    "`refresh_quality_report` re-runs the Preflight QC automated checks and refreshes the release's quality report (read the results with get_release_review view quality_report); the server applies an hourly refresh budget, so frequent calls may be rate-limited. Preflight QC is an optional add-on.",
+    '`validate` returns any problems that would block distribution, as a human-readable `errors` list and a machine-readable `errors_structured` list — it changes nothing and is safe to repeat; run it before distributing. ' +
+    '`refresh_quality_report` re-runs the Preflight QC checks and refreshes the quality report (read it with get_release_review view quality_report); the server applies an hourly refresh budget, so frequent calls may be rate-limited. Preflight QC is an optional add-on.',
   inputShape: {
     release_id: releaseId,
-    check: z
-      .enum(['validate', 'refresh_quality_report'])
-      .describe('Which check to run: validate or refresh_quality_report.'),
+    check: z.enum(['validate', 'refresh_quality_report']).describe('Which check to run.'),
   },
   annotations: { idempotentHint: true },
   handler: (args, { client }) =>
@@ -150,19 +146,15 @@ const manageReleaseLinks: ToolDef = {
   title: 'Manage a release smart link',
   description:
     "Manage a release's smart-link landing page. Pick ONE action with `action`: " +
-    '`update_landing_config` sets the landing-page configuration — pass it in `config` (required for this action). `config.actions` uses the current (v2) action-list contract — each entry describes one call-to-action on the page — and you can also set links_page_enabled, config_mode, page_style, custom_cta_text, custom_description, and pre_order_links; this replaces the landing configuration. ' +
+    '`update_landing_config` replaces the landing-page configuration with `config` (required for this action) — `config.actions` uses the current (v2) action-list contract (one entry per call-to-action); other keys: links_page_enabled, config_mode, page_style, custom_cta_text, custom_description, pre_order_links. ' +
     "`create_short_url` creates (or returns the existing) short URL for the release's smart-link landing page — safe to repeat.",
   inputShape: {
     release_id: releaseId,
-    action: z
-      .enum(['update_landing_config', 'create_short_url'])
-      .describe('Which action: update_landing_config or create_short_url.'),
+    action: z.enum(['update_landing_config', 'create_short_url']).describe('Which action.'),
     config: z
       .record(z.string(), z.unknown())
       .optional()
-      .describe(
-        'The landing-page configuration to set (required for update_landing_config): actions (the v2 action list), links_page_enabled, config_mode, page_style, custom_cta_text, custom_description, pre_order_links.',
-      ),
+      .describe('The landing-page configuration to set (required for update_landing_config).'),
   },
   annotations: {},
   handler: (args, { client }) => {
@@ -189,7 +181,7 @@ const addReviewIssueNote: ToolDef = {
   gate: 'safe_write',
   title: 'Add a note to a review issue',
   description:
-    'Add a note to a release review issue — for example to explain a fix or add context for the reviewer. `review_issue_id` is the id of the issue (from get_release_review view issues).',
+    'Add a note to a release review issue — to explain a fix or add reviewer context. `review_issue_id` comes from get_release_review view issues.',
   inputShape: {
     review_issue_id: z.number().int().positive(),
     note: z.string().describe('The note text to attach to the issue.'),

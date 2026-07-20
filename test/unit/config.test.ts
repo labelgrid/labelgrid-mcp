@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FULL_WRITES_ACK, loadConfig } from '../../src/config.js';
+import {
+  FULL_WRITES_ACK,
+  KNOWN_TOOLSETS,
+  defaultExcludedToolsets,
+  loadConfig,
+} from '../../src/config.js';
 
 const TOKEN = 'lg_test_token';
 
@@ -113,9 +118,9 @@ describe('loadConfig toolsets', () => {
   });
 
   it('parses a trimmed comma-separated list', () => {
-    const c = loadConfig(baseEnv({ LABELGRID_TOOLSETS: 'catalog, releases ,analytics' }));
+    const c = loadConfig(baseEnv({ LABELGRID_TOOLSETS: 'catalog, releases ,insights' }));
     expect(c.toolsets).not.toBeNull();
-    expect([...(c.toolsets as Set<string>)].sort()).toEqual(['analytics', 'catalog', 'releases']);
+    expect([...(c.toolsets as Set<string>)].sort()).toEqual(['catalog', 'insights', 'releases']);
   });
 
   it('warns on stderr for an unknown toolset name without throwing', () => {
@@ -124,5 +129,36 @@ describe('loadConfig toolsets', () => {
     const written = err.mock.calls.map((call) => String(call[0])).join('\n');
     expect(written).toContain('bogus');
     expect(c.toolsets?.has('catalog')).toBe(true);
+  });
+
+  it('translates legacy toolset names silently, with no warning', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const c = loadConfig(
+      baseEnv({ LABELGRID_TOOLSETS: 'identity,review,delivery,analytics,accounting' }),
+    );
+    expect([...(c.toolsets as Set<string>)].sort()).toEqual([
+      'account',
+      'finance',
+      'insights',
+      'releases',
+    ]);
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it('accepts the current eight toolset names without warning', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const names = [...KNOWN_TOOLSETS];
+    const c = loadConfig(baseEnv({ LABELGRID_TOOLSETS: names.join(',') }));
+    expect([...(c.toolsets as Set<string>)].sort()).toEqual([...names].sort());
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it('names webhooks in the default exclusion set', () => {
+    expect([...defaultExcludedToolsets]).toEqual(['webhooks']);
+  });
+
+  it('naming webhooks explicitly puts it in the selected toolsets', () => {
+    const c = loadConfig(baseEnv({ LABELGRID_TOOLSETS: 'webhooks' }));
+    expect(c.toolsets?.has('webhooks')).toBe(true);
   });
 });

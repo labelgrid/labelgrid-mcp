@@ -16,7 +16,7 @@ const listWebhooks: ToolDef = {
   title: 'List webhooks',
   description:
     "Read your webhook subscriptions. `view: 'config'` (the default) lists the webhook subscriptions configured on your account — each with its URL, subscribed events and active state — or retrieves one subscription when `webhook_id` is given. " +
-    "`view: 'logs'` retrieves the recent delivery log for a webhook (`webhook_id` required) — the attempts, response codes and outcomes — to debug why events did or did not reach your endpoint.",
+    "`view: 'logs'` retrieves the recent delivery log for a webhook (`webhook_id` required) — attempts, response codes and outcomes — to debug why events did or did not reach your endpoint.",
   inputShape: {
     webhook_id: webhookId,
     view: z
@@ -53,22 +53,22 @@ const manageWebhook: ToolDef = {
   title: 'Manage a webhook',
   description:
     'Manage a webhook subscription. Pick ONE action with `action`: ' +
-    '`create` creates a subscription — pass `fields` with `name` (a label for this webhook), `url` (the HTTPS endpoint that will receive event deliveries) and `events` (the event subscription object selecting which event types this webhook receives — call list_reference_data type webhook_event_types for the available types and each payload shape); the API returns a signing secret once on creation — store it to verify incoming payloads. ' +
-    '`update` updates a subscription — supply only the fields you want to change in `fields`: name, url, events, or is_active (set false to pause deliveries). ' +
-    '`delete` deletes the subscription permanently — it will stop receiving events. ' +
-    '`test` sends a test event to the webhook’s endpoint so you can confirm it is reachable and your signature verification works — safe to repeat. ' +
-    '`rotate_secret` generates a new signing secret and returns it — WARNING: the old secret stops working immediately — update your endpoint’s signature verification with the new secret right away or deliveries will fail verification. ' +
+    '`create` — pass `fields` with `name`, `url` (the HTTPS endpoint receiving deliveries) and `events` (the event subscription object — see list_reference_data type webhook_event_types); the API returns a signing secret ONCE on creation — store it to verify incoming payloads. ' +
+    '`update` — supply only the fields to change in `fields`: name, url, events, or is_active (false pauses deliveries). ' +
+    '`delete` — permanently removes the subscription; it stops receiving events. ' +
+    '`test` — sends a test event to confirm reachability and signature verification; safe to repeat. ' +
+    '`rotate_secret` — generates and returns a new signing secret — WARNING: the old secret stops working immediately; update your endpoint right away or deliveries will fail verification. ' +
     '`webhook_id` is required for every action except create.',
   inputShape: {
     action: z
       .enum(['create', 'update', 'delete', 'test', 'rotate_secret'])
-      .describe('Which webhook action to perform.'),
+      .describe('Which action.'),
     webhook_id: webhookId,
     fields: z
       .record(z.string(), z.unknown())
       .optional()
       .describe(
-        'The webhook attributes (create: name, url, events; update: any of name, url, events, is_active), forwarded verbatim to the API.',
+        'The webhook attributes (create: name, url, events; update: any of those plus is_active), forwarded verbatim.',
       ),
   },
   annotations: { destructiveHint: true },

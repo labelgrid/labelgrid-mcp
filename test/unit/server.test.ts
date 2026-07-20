@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LabelGridClient } from '../../src/api/http.js';
 import type { Config } from '../../src/config.js';
 import { buildServer } from '../../src/server.js';
+import { accountTools } from '../../src/tools/account.js';
 import { allTools } from '../../src/tools/all.js';
-import { identityTools } from '../../src/tools/identity.js';
 import type { ToolDef } from '../../src/tools/types.js';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -24,20 +24,6 @@ function config(overrides: Partial<Config> = {}): Config {
   };
 }
 
-async function harness(cfg: Config, fetchFn: typeof fetch) {
-  const apiClient = new LabelGridClient({
-    baseUrl: cfg.baseUrl,
-    token: cfg.token,
-    fetchFn,
-    version: '0.0.0-test',
-  });
-  const server = buildServer(cfg, apiClient, identityTools);
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'test-client', version: '1.0.0' });
-  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  return { client, close: async () => await client.close() };
-}
-
 const openHarnesses: Array<() => Promise<void>> = [];
 afterEach(async () => {
   while (openHarnesses.length > 0) {
@@ -46,12 +32,6 @@ afterEach(async () => {
   }
   vi.restoreAllMocks();
 });
-
-async function connect(cfg: Config, fetchFn: typeof fetch) {
-  const h = await harness(cfg, fetchFn);
-  openHarnesses.push(h.close);
-  return h.client;
-}
 
 async function connectWithTools(cfg: Config, fetchFn: typeof fetch, tools: ToolDef[]) {
   const apiClient = new LabelGridClient({
@@ -68,40 +48,109 @@ async function connectWithTools(cfg: Config, fetchFn: typeof fetch, tools: ToolD
   return client;
 }
 
+async function connect(cfg: Config, fetchFn: typeof fetch) {
+  return connectWithTools(cfg, fetchFn, accountTools);
+}
+
 describe('buildServer registration', () => {
-  it('always lists get_me and includes revoke_api_token when writes are on', async () => {
+  it('always lists get_account and includes revoke_api_token when writes are on', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connect(config({ writes: true }), fetchFn as unknown as typeof fetch);
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    expect(names).toContain('get_me');
+    expect(names).toContain('get_account');
     expect(names).toContain('revoke_api_token');
   });
 
-  it('hides revoke_api_token when writes are off but still lists get_me', async () => {
+  it('hides revoke_api_token when writes are off but still lists get_account', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connect(config({ writes: false }), fetchFn as unknown as typeof fetch);
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    expect(names).toContain('get_me');
+    expect(names).toContain('get_account');
     expect(names).not.toContain('revoke_api_token');
   });
 
-  it('marks get_me as read-only in its annotations', async () => {
+  it('marks get_account as read-only in its annotations', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connect(config(), fetchFn as unknown as typeof fetch);
     const { tools } = await client.listTools();
-    const getMe = tools.find((t) => t.name === 'get_me');
-    expect(getMe?.annotations?.readOnlyHint).toBe(true);
+    const getAccount = tools.find((t) => t.name === 'get_account');
+    expect(getAccount?.annotations?.readOnlyHint).toBe(true);
+  });
+});
+
+describe('buildServer default connected surface', () => {
+  it('exposes EXACTLY 21 tools by default (no webhooks, no full writes)', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, allTools());
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).toHaveLength(21);
+    // Webhooks are default-off; full writes are unarmed.
+    expect(names).not.toContain('list_webhooks');
+    expect(names).not.toContain('manage_webhook');
+    expect(names).not.toContain('distribute_release');
+    expect(names).not.toContain('upload_asset');
+    // The consolidated families are present.
+    expect(names).toContain('get_account');
+    expect(names).toContain('search_catalog');
+    expect(names).toContain('get_release_review');
+    expect(names).toContain('query_financials');
+  });
+
+  it('exposes the webhook pair when LABELGRID_TOOLSETS names webhooks', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ toolsets: new Set(['webhooks']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    expect(names).toEqual(['list_webhooks', 'manage_webhook']);
+  });
+
+  it('exposes all 30 tools when every toolset is named and full writes are armed', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({
+        fullWrites: true,
+        toolsets: new Set([
+          'account',
+          'reference',
+          'catalog',
+          'releases',
+          'insights',
+          'finance',
+          'webhooks',
+          'distribution',
+        ]),
+      }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(30);
+  });
+
+  it('registers the nine reference resources', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, allTools());
+    const { resources } = await client.listResources();
+    expect(resources).toHaveLength(9);
+    for (const r of resources) {
+      expect(r.uri).toMatch(/^labelgrid:\/\/reference\//);
+    }
   });
 });
 
 describe('buildServer tool invocation', () => {
-  it('returns the JSON payload from a successful get_me call', async () => {
+  it('returns the JSON payload from a successful get_account call', async () => {
     const account = { id: 8675309, name: 'sandbox account' };
     const fetchFn = vi.fn(async () => jsonResponse(200, account));
     const client = await connect(config(), fetchFn as unknown as typeof fetch);
-    const result = await client.callTool({ name: 'get_me', arguments: {} });
+    const result = await client.callTool({ name: 'get_account', arguments: { view: 'profile' } });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     expect(JSON.parse(content[0].text)).toEqual(account);
@@ -110,7 +159,7 @@ describe('buildServer tool invocation', () => {
   it('returns an isError result carrying TOKEN_INVALID on a 401', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(401, { message: 'Unauthenticated.' }));
     const client = await connect(config(), fetchFn as unknown as typeof fetch);
-    const result = await client.callTool({ name: 'get_me', arguments: {} });
+    const result = await client.callTool({ name: 'get_account', arguments: { view: 'profile' } });
     expect(result.isError).toBe(true);
     const content = result.content as Array<{ type: string; text: string }>;
     expect(content[0].text).toContain('TOKEN_INVALID');
@@ -155,7 +204,7 @@ describe('buildServer legal disclosure instructions', () => {
 describe('buildServer setup mode', () => {
   const setupCfg = () => config({ setupMode: true, token: null, writes: false });
 
-  it('lists the setup tool plus the full inert catalog', async () => {
+  it('lists the setup helper plus the 28-tool default catalog (webhooks excluded)', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
       setupCfg(),
@@ -164,15 +213,31 @@ describe('buildServer setup mode', () => {
     );
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    // The setup helper leads, and the whole catalog is visible to introspection
-    // (write gates do not hide tools here — nothing can execute without a token).
+    // The setup helper leads, and the catalog is visible to introspection
+    // (write gates do not hide tools here — nothing can execute without a
+    // token). The webhooks default-off exclusion applies to the listing too,
+    // so the advertised surface matches reality: 28 catalog tools + setup.
     expect(names).toContain('setup');
-    expect(names).toContain('get_me');
-    expect(names).toContain('create_release');
+    expect(names).toContain('get_account');
+    expect(names).toContain('create_catalog_item');
     expect(names).toContain('distribute_release');
-    // The catalog is mid-consolidation: the webhook family is already the
-    // 2-tool consolidated pair. The swap stage pins the exact final counts.
-    expect(names.length).toBeGreaterThan(70);
+    expect(names).not.toContain('list_webhooks');
+    expect(names).not.toContain('manage_webhook');
+    expect(names).toHaveLength(29);
+  });
+
+  it('lists the webhook pair in setup mode when webhooks is named explicitly', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ setupMode: true, token: null, writes: false, toolsets: new Set(['webhooks']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).toContain('setup');
+    expect(names).toContain('list_webhooks');
+    expect(names).toContain('manage_webhook');
   });
 
   it('catalog tools refuse with setup guidance and never touch the network', async () => {
@@ -182,10 +247,10 @@ describe('buildServer setup mode', () => {
       fetchFn as unknown as typeof fetch,
       allTools(),
     );
-    for (const name of ['get_me', 'distribute_release']) {
+    for (const name of ['get_account', 'distribute_release']) {
       const result = await client.callTool({
         name,
-        arguments: name === 'get_me' ? {} : { release_id: 1 },
+        arguments: name === 'get_account' ? { view: 'profile' } : { release_id: 1 },
       });
       expect(result.isError).toBe(true);
       const text = (result.content as Array<{ text: string }>)[0].text;
@@ -198,15 +263,15 @@ describe('buildServer setup mode', () => {
   it('setup mode honors an explicit toolset narrowing in the listing', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
-      config({ setupMode: true, token: null, writes: false, toolsets: new Set(['identity']) }),
+      config({ setupMode: true, token: null, writes: false, toolsets: new Set(['account']) }),
       fetchFn as unknown as typeof fetch,
       allTools(),
     );
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
     expect(names).toContain('setup');
-    expect(names).toContain('get_me');
-    expect(names).not.toContain('create_release');
+    expect(names).toContain('get_account');
+    expect(names).not.toContain('create_catalog_item');
   });
 
   it('returns the connection guide without making any API call', async () => {
@@ -227,6 +292,17 @@ describe('buildServer setup mode', () => {
     expect(guide.security_note).toBeDefined();
     // No API call is ever made from setup mode.
     expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('names the current toolsets and the webhooks opt-in in the optional settings', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connect(setupCfg(), fetchFn as unknown as typeof fetch);
+    const result = await client.callTool({ name: 'setup', arguments: {} });
+    const text = (result.content as Array<{ text: string }>)[0].text;
+    expect(text).toContain('account, reference, catalog, releases, insights, finance');
+    expect(text).toContain('webhooks');
+    expect(text).toContain('off by default');
+    expect(text).toContain('aliases');
   });
 
   it('points the instructions at the setup tool and carries the AS-IS legal text', async () => {
@@ -250,7 +326,7 @@ describe('buildServer setup mode', () => {
 describe('buildServer handler exception safety', () => {
   const throwingTool: ToolDef = {
     name: 'boom',
-    toolset: 'identity',
+    toolset: 'account',
     gate: 'read',
     title: 'Boom',
     description: 'A tool whose handler throws, to exercise the wrapper safety net.',
@@ -280,10 +356,10 @@ describe('buildServer handler exception safety', () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, [
       throwingTool,
-      ...identityTools,
+      ...accountTools,
     ]);
     await client.callTool({ name: 'boom', arguments: {} });
-    const ok = await client.callTool({ name: 'get_me', arguments: {} });
+    const ok = await client.callTool({ name: 'get_account', arguments: { view: 'profile' } });
     expect(ok.isError).toBeFalsy();
   });
 });

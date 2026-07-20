@@ -10,12 +10,11 @@ const listReferenceData: ToolDef = {
   gate: 'read',
   title: 'List reference data',
   description:
-    'Fetch a LabelGrid reference dataset used to resolve the IDs and codes that catalog and release tools expect. Pick ONE dataset with `type`: ' +
-    '`genres` and `genre_categories` (values for primary/secondary/tertiary genre IDs), `languages` (audio and metadata language codes), ' +
-    '`contributor_roles` (valid role names for track contributors), `instruments`, `distro_outlets` (the distribution outlets/stores available to your account), ' +
-    '`territories` (country/territory codes), `issue_definitions` (the catalog of review issue definitions — each code’s human-readable title, description, severity and whether it blocks distribution; issue codes are string slugs), ' +
-    'or `webhook_event_types` (every available webhook event type with the schema of the payload it delivers — use it to decide which events to subscribe a webhook to). ' +
-    'Call this before creating or updating a release or track when you need a valid ID or code. ' +
+    'Fetch a LabelGrid reference dataset used to resolve the IDs and codes the catalog and release tools expect. Pick ONE dataset with `type`: ' +
+    '`genres` and `genre_categories` (genre IDs), `languages` (audio/metadata language codes), `contributor_roles`, `instruments`, `distro_outlets` (the outlets/stores available to your account), ' +
+    '`territories` (country codes), `issue_definitions` (each review issue code’s title, description, severity and whether it blocks distribution; codes are string slugs), ' +
+    'or `webhook_event_types` (every webhook event type with its payload schema). ' +
+    'Call this when you need a valid ID or code. ' +
     'The same datasets are exposed as MCP resources at labelgrid://reference/{type}; this tool is the fallback for clients that don’t surface resources.',
   inputShape: {
     type: z.enum(REFERENCE_TYPES),
