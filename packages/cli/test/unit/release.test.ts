@@ -38,10 +38,13 @@ describe('release lifecycle commands', () => {
     ]);
   });
 
-  it('confirm-review posts without a confirmation prompt', async () => {
-    const r = await run(['release', 'confirm-review', '12']);
+  it('confirm-review is confirm-gated like the other final actions', async () => {
+    const blocked = await run(['release', 'confirm-review', '12'], { answer: '' });
+    expect(blocked.code).toBe(1);
+    expect(blocked.calls).toHaveLength(0);
+
+    const r = await run(['release', 'confirm-review', '12', '--yes']);
     expect(r.code).toBe(0);
-    expect(r.stderr).not.toContain('Type y to confirm');
     expect(r.calls).toEqual([
       { method: 'post', args: ['/releases/12/confirm-review', undefined, undefined] },
     ]);

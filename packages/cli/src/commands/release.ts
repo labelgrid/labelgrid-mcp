@@ -61,9 +61,15 @@ export function registerRelease(program: Command, resolved: Resolved): void {
 
   release
     .command('confirm-review <id>')
-    .description('Confirm a Preflight-QC-held release into distribution review')
+    .description('Confirm a Preflight-QC-held release into distribution review (FINAL action)')
     .action(async (id: string, _opts: unknown, cmd: Command) => {
       const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
+      await confirmOrAbort(
+        ctx.out,
+        `confirm release ${id} out of its quality-report hold and into distribution review`,
+        ctx.yes,
+        ctx.readLine,
+      );
       await runApi(ctx, ctx.client.post(`/releases/${encodeURIComponent(id)}/confirm-review`));
     });
 
