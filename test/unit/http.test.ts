@@ -384,3 +384,39 @@ describe('LabelGridClient response-size bounds', () => {
     if (!isOk(r)) expect(r.error.code).toBe('RESPONSE_TOO_LARGE');
   });
 });
+
+describe('request timeouts', () => {
+  it('maps a timed-out API request to a structured TIMEOUT error', async () => {
+    // A stub that honors the abort signal like real fetch: rejects on abort.
+    const hangingFetch = ((_url: unknown, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      })) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      fetchFn: hangingFetch,
+      version: '0.0.0-test',
+      timeoutMs: 25,
+    });
+    const result = await client.get('/me');
+    expect('error' in result && result.error.code).toBe('TIMEOUT');
+    expect('error' in result && result.error.message).toContain('timed out');
+  });
+
+  it('passes an abort signal to raw transfers', async () => {
+    let sawSignal = false;
+    const fetchFn = (async (_url: unknown, init?: RequestInit) => {
+      sawSignal = init?.signal instanceof AbortSignal;
+      return new Response('ok', { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      fetchFn,
+      version: '0.0.0-test',
+    });
+    await client.raw('https://storage.example.test/presigned', { method: 'PUT', body: 'x' });
+    expect(sawSignal).toBe(true);
+  });
+});

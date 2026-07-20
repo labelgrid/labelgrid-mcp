@@ -204,12 +204,25 @@ export class LabelGridClient {
   private readonly token: string;
   private readonly fetchFn: typeof fetch;
   private readonly version: string;
+  private readonly timeoutMs: number;
+  private readonly rawTimeoutMs: number;
 
-  constructor(opts: { baseUrl: string; token: string; fetchFn?: typeof fetch; version: string }) {
+  constructor(opts: {
+    baseUrl: string;
+    token: string;
+    fetchFn?: typeof fetch;
+    version: string;
+    /** API request timeout (default 60s) — a hung call must never hang a tool. */
+    timeoutMs?: number;
+    /** Timeout for raw transfers like presigned uploads (default 10min). */
+    rawTimeoutMs?: number;
+  }) {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.token = opts.token;
     this.fetchFn = opts.fetchFn ?? fetch;
     this.version = opts.version;
+    this.timeoutMs = opts.timeoutMs ?? 60_000;
+    this.rawTimeoutMs = opts.rawTimeoutMs ?? 600_000;
   }
 
   private authHeaders(): Record<string, string> {
@@ -232,7 +245,7 @@ export class LabelGridClient {
       // across separate tool calls); otherwise a fresh UUID is generated.
       headers['Idempotency-Key'] = opts.idempotencyKey ?? randomUUID();
     }
-    const init: RequestInit = { method, headers };
+    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(this.timeoutMs) };
     if (opts.rawBody !== undefined) {
       init.body = opts.rawBody;
     } else if (opts.body !== undefined) {
@@ -244,6 +257,18 @@ export class LabelGridClient {
     try {
       res = await this.fetchFn(url, init);
     } catch (err) {
+      if (
+        err instanceof DOMException &&
+        (err.name === 'TimeoutError' || err.name === 'AbortError')
+      ) {
+        return {
+          error: {
+            code: 'TIMEOUT',
+            message: `The request timed out after ${Math.round(this.timeoutMs / 1000)} seconds. Try again, or narrow the request.`,
+            status: 0,
+          },
+        };
+      }
       return {
         error: {
           code: 'NETWORK_ERROR',
@@ -407,6 +432,6 @@ export class LabelGridClient {
    * Bearer token would break the signature.
    */
   raw(url: string, init: RequestInit): Promise<Response> {
-    return this.fetchFn(url, init);
+    return this.fetchFn(url, { signal: AbortSignal.timeout(this.rawTimeoutMs), ...init });
   }
 }
