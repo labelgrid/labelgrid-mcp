@@ -419,4 +419,31 @@ describe('request timeouts', () => {
     await client.raw('https://storage.example.test/presigned', { method: 'PUT', body: 'x' });
     expect(sawSignal).toBe(true);
   });
+
+  it('maps a timeout that fires mid-stream to a structured TIMEOUT error', async () => {
+    const stallingBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"partial":'));
+      },
+      pull() {
+        return new Promise<void>((_resolve, reject) => {
+          setTimeout(
+            () => reject(new DOMException('The operation timed out.', 'TimeoutError')),
+            10,
+          );
+        });
+      },
+    });
+    const fetchFn = (async () =>
+      new Response(stallingBody, { status: 200 })) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      fetchFn,
+      version: '0.0.0-test',
+    });
+    const result = await client.get('/me');
+    expect('error' in result && result.error.code).toBe('TIMEOUT');
+    expect('error' in result && result.error.message).toContain('reading the response');
+  });
 });
