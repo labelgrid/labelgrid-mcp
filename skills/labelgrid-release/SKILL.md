@@ -27,11 +27,12 @@ called out.
 | --- | --- | --- |
 | Judgment / reasoning — draft release & track metadata, resolve genre/language/outlet IDs, read validation errors, inspect review issues | **MCP tools** | The agent reasons over structured JSON already in context; no shell required. |
 | Byte-moving & batch — upload audio/artwork, download masters/statements, loop over many releases or tracks, run in CI | **CLI** (`labelgrid …`) | Streams file bytes, pipes `--json` to `jq`, and drives shell loops. **Available only when the environment can execute shell commands.** |
-| Final gated actions — validate, distribute, takedown | **Either** | The MCP path is gated behind the full-writes acknowledgment (env vars); the CLI path is gated behind an interactive confirmation. |
+| Final gated actions — distribute, takedown, confirm a QC hold | **Either** | The MCP path is gated behind the full-writes acknowledgment (env vars); the CLI path prompts for interactive confirmation. |
 
 Rule of thumb: **reason with MCP, move files and batch with the CLI.** When only one is
-available, it can do the whole job — the CLI covers uploads that the MCP server places
-behind full writes, and the MCP server covers everything when no shell is available.
+available, it can do the whole job — each vehicle gates the consequential steps its own
+way (full-writes arming for MCP, confirmation prompts for the CLI); neither path skips
+the gate.
 
 ### Setup & safety gates (read once)
 
@@ -49,7 +50,7 @@ server has three fail-closed gates:
 
    ```bash
    LABELGRID_ENABLE_FULL_WRITES=true
-   LABELGRID_FULL_WRITES_ACK=I accept responsibility for AI-driven distribution actions
+   LABELGRID_FULL_WRITES_ACK='I accept responsibility for AI-driven distribution actions'
    ```
 
    The acknowledgment must match exactly or full writes stay off.
@@ -107,8 +108,9 @@ One call per track, against the release id from Step 2.
 Finalized files. **These become immutable once the release is distributed — upload the
 final versions before distributing.**
 
-- **CLI (preferred when a shell is available)** — streams the file bytes and needs no
-  arming (you are present):
+- **CLI (preferred when a shell is available)** — streams the file bytes. Uploads need
+  no arming here because a file can simply be re-uploaded until the release is
+  distributed; the irreversible step (distribute) keeps its own gate in both vehicles:
 
   ```bash
   labelgrid upload ./master.wav --track <track-id> --type stereo
@@ -150,7 +152,9 @@ quality report before confirming the release.
 - CLI: `labelgrid review quality-report --release <release-id>` (add `--refresh` to re-run
   the checks first).
 - If Preflight QC placed the release **on hold**, accept it with `confirm_review` (MCP,
-  full-write) or `labelgrid release confirm-review <release-id>` (CLI) after reviewing.
+  full-write) or `labelgrid release confirm-review <release-id>` (CLI; prompts for
+  confirmation) after reviewing. Accepting the hold sends the release onward toward
+  distribution — do it only on explicit user direction, never to "unstick" a workflow.
 
 ### Step 7 — Distribute (final, consequential)
 
@@ -162,7 +166,9 @@ The server enforces the account's weekly submission limit.
   unobserved call.
 - CLI: `labelgrid release distribute <release-id>` — prompts for confirmation
   interactively (that confirmation is the acknowledgment); add `--idempotency-key <key>`
-  for a safe retry, or `--yes` to skip the prompt in a script.
+  for a safe retry. `--yes` skips the prompt for non-interactive scripts — an agent
+  passes it only when the user has explicitly instructed distributing that exact
+  release, never on its own initiative.
 
 ### Step 8 — Track delivery
 
@@ -228,9 +234,10 @@ fresh submission.
   available, that is the safe default doing its job: prepare and validate everything, and
   leave the irreversible submission as a deliberate, opt-in human step.
 - **Destructive CLI commands prompt.** `release distribute`, `release takedown`,
-  `catalog delete`, `asset delete`, `license delete`, `beatport enable`, and the other
-  destructive commands ask for confirmation before any API call. `--yes` skips the prompt
-  only when the operator has deliberately chosen non-interactive mode.
+  `release confirm-review`, `catalog delete`, `asset delete`, `license delete`,
+  `beatport enable`, and the other destructive commands ask for confirmation before any
+  API call. `--yes` skips the prompt only when the operator has deliberately chosen
+  non-interactive mode — an agent never adds `--yes` on its own initiative.
 - **Validation is free and repeatable — always validate before distribute.**
   `run_release_checks` (`check: 'validate'`) / `labelgrid release validate` changes
   nothing; run it, fix `errors_structured`, and re-run until clean, then distribute.
