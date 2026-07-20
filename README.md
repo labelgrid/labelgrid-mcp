@@ -96,7 +96,7 @@ Valid toolsets: `identity`, `reference`, `catalog`, `releases`, `review`, `analy
 
 <!-- TOOLS:BEGIN -->
 
-_83 tools across 10 toolsets. This table is generated from the
+_76 tools across 10 toolsets. This table is generated from the
 tool definitions by `npm run gen-docs` — do not edit it by hand._
 
 ### Identity `identity`
@@ -205,15 +205,8 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 
 | Tool | Gate | Description |
 | --- | --- | --- |
-| `list_webhooks` | read | List the webhook subscriptions configured on your account, each with its URL, subscribed events and active state. |
-| `get_webhook` | read | Retrieve one webhook subscription by id. |
-| `get_webhook_logs` | read | Retrieve the recent delivery log for a webhook — the attempts, response codes and outcomes — to debug why events did or did not reach your endpoint. |
-| `list_webhook_event_types` | read | List every available webhook event type, each with the schema of the payload it delivers. Use it to decide which events to subscribe a webhook to. |
-| `create_webhook` | write | Create a webhook subscription. `name` and `url` (the HTTPS endpoint that will receive events) are required, along with `events` selecting which event types to deliver. The API returns a signing secret once on creation — store it to verify incoming payloads. |
-| `update_webhook` | write | Update a webhook subscription. Supply only the fields you want to change: `name`, `url`, `events`, or `is_active` (set false to pause deliveries). |
-| `delete_webhook` | write | Delete a webhook subscription permanently. It will stop receiving events. |
-| `test_webhook` | write | Send a test event to a webhook’s endpoint so you can confirm it is reachable and your signature verification works. Safe to repeat. |
-| `rotate_webhook_secret` | write | Generate a new signing secret for a webhook and return it. WARNING: the old secret stops working immediately — update your endpoint’s signature verification with the new secret right away or deliveries will fail verification. |
+| `list_webhooks` | read | Read your webhook subscriptions. `view: 'config'` (the default) lists the webhook subscriptions configured on your account — each with its URL, subscribed events and active state — or retrieves one subscription when `webhook_id` is given. `view: 'logs'` retrieves the recent delivery log for a webhook (`webhook_id` required) — the attempts, response codes and outcomes — to debug why events did or did not reach your endpoint. |
+| `manage_webhook` | write | Manage a webhook subscription. Pick ONE action with `action`: `create` creates a subscription — pass `fields` with `name` (a label for this webhook), `url` (the HTTPS endpoint that will receive event deliveries) and `events` (the event subscription object selecting which event types this webhook receives — call list_reference_data type webhook_event_types for the available types and each payload shape); the API returns a signing secret once on creation — store it to verify incoming payloads. `update` updates a subscription — supply only the fields you want to change in `fields`: name, url, events, or is_active (set false to pause deliveries). `delete` deletes the subscription permanently — it will stop receiving events. `test` sends a test event to the webhook’s endpoint so you can confirm it is reachable and your signature verification works — safe to repeat. `rotate_secret` generates a new signing secret and returns it — WARNING: the old secret stops working immediately — update your endpoint’s signature verification with the new secret right away or deliveries will fail verification. `webhook_id` is required for every action except create. |
 
 ### Distribution (full writes) `distribution`
 

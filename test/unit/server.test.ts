@@ -170,7 +170,9 @@ describe('buildServer setup mode', () => {
     expect(names).toContain('get_me');
     expect(names).toContain('create_release');
     expect(names).toContain('distribute_release');
-    expect(names.length).toBeGreaterThan(80);
+    // The catalog is mid-consolidation: the webhook family is already the
+    // 2-tool consolidated pair. The swap stage pins the exact final counts.
+    expect(names.length).toBeGreaterThan(70);
   });
 
   it('catalog tools refuse with setup guidance and never touch the network', async () => {
