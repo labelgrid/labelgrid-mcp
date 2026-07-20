@@ -125,3 +125,47 @@ describe('token redaction', () => {
     expect(human.stdout).toContain('***REDACTED***');
   });
 });
+
+describe('unexpected-error output is scrubbed', () => {
+  it('redacts the resolved token from an unexpected error message', async () => {
+    const r = await run(['auth', 'whoami'], {
+      env: { LABELGRID_API_TOKEN: TEST_TOKEN },
+      createClient: () => {
+        throw new Error(`connection to ${TEST_TOKEN} refused`);
+      },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('UNEXPECTED_ERROR:');
+    expect(r.stderr).toContain('[redacted]');
+    expect(r.stderr).not.toContain(TEST_TOKEN);
+  });
+
+  it('keeps only the sanitized first line of a child-process-style error', async () => {
+    const r = await run(['auth', 'whoami'], {
+      env: { LABELGRID_API_TOKEN: TEST_TOKEN },
+      createClient: () => {
+        throw new Error(
+          `Command failed: security add-generic-password -w ${TEST_TOKEN}\nextra stderr line`,
+        );
+      },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('UNEXPECTED_ERROR: Command failed: security');
+    // The argv (with the token) and trailing stderr are dropped.
+    expect(r.stderr).not.toContain('add-generic-password');
+    expect(r.stderr).not.toContain('extra stderr line');
+    expect(r.stderr).not.toContain(TEST_TOKEN);
+  });
+
+  it('leaves a structured API error unchanged (no [redacted] mask)', async () => {
+    const r = await run(['auth', 'whoami'], {
+      clientCfg: {
+        result: { error: { code: 'NOT_FOUND', message: 'nope', status: 404 } },
+      },
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('NOT_FOUND: nope');
+    expect(r.stderr).not.toContain('[redacted]');
+    expect(r.stderr).not.toContain('UNEXPECTED_ERROR');
+  });
+});
