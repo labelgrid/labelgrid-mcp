@@ -121,9 +121,20 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
     );
   }
 
-  // The nine labelgrid://reference/{type} resources are registered in every
-  // mode; in setup mode their reads return NOT_CONNECTED guidance.
-  registerReferenceResources(server, config, client);
+  // The nine labelgrid://reference/{type} resources follow the SAME listing
+  // rule as the reference tools: they are registered only when the `reference`
+  // toolset is enabled. Reference is not default-excluded, so an unset
+  // LABELGRID_TOOLSETS (or one naming `reference`) registers them; an explicit
+  // selection omitting `reference` disables them. Setup mode keeps them
+  // registered-but-inert under the same rule (reads return NOT_CONNECTED).
+  const referenceEnabled = config.setupMode
+    ? config.toolsets === null
+      ? !defaultExcludedToolsets.has('reference')
+      : config.toolsets.has('reference')
+    : isToolEnabled({ gate: 'read', toolset: 'reference' }, config);
+  if (referenceEnabled) {
+    registerReferenceResources(server, config, client);
+  }
 
   return server;
 }

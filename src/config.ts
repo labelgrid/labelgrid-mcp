@@ -39,10 +39,11 @@ export const KNOWN_TOOLSETS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Pre-0.3.0 toolset names still accepted in LABELGRID_TOOLSETS, translated
- * silently (no warning) to their current toolset. Names that survived the
- * regroup (catalog, reference, releases, webhooks, distribution) map to
- * themselves via KNOWN_TOOLSETS and need no alias entry.
+ * Pre-0.3.0 toolset names still accepted in LABELGRID_TOOLSETS, translated to
+ * their current toolset. Every legacy name used emits a stderr warning naming
+ * the toolset it maps to (see loadConfig). Names that survived the regroup
+ * (catalog, reference, releases, webhooks, distribution) map to themselves via
+ * KNOWN_TOOLSETS and need no alias entry.
  */
 export const LEGACY_TOOLSET_ALIASES: Readonly<Record<string, string>> = {
   identity: 'account',
@@ -121,7 +122,14 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       .filter((s) => s.length > 0)) {
       const alias = LEGACY_TOOLSET_ALIASES[name];
       if (alias !== undefined) {
-        // Legacy names are translated silently — no warning.
+        // Legacy names still work, but warn loudly so the operator migrates —
+        // and, for the review/delivery → releases remaps, flag that `releases`
+        // also carries write tools so a read-only expectation is not violated.
+        let warning = `Legacy toolset name "${name}" in LABELGRID_TOOLSETS maps to "${alias}" — update your configuration to use "${alias}".`;
+        if (name === 'review' || name === 'delivery') {
+          warning += ` Note: the mapped "${alias}" toolset also contains write tools (run_release_checks, manage_release_links, add_review_issue_note) — set LABELGRID_READ_ONLY=true or LABELGRID_ENABLE_WRITES=false to keep a read-only surface.`;
+        }
+        log('warn', warning);
         toolsets.add(alias);
         continue;
       }

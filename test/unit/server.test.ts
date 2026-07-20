@@ -145,6 +145,59 @@ describe('buildServer default connected surface', () => {
   });
 });
 
+describe('buildServer reference resources honor the toolset gate', () => {
+  it('registers the nine resources when reference is named explicitly', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ toolsets: new Set(['reference']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { resources } = await client.listResources();
+    expect(resources).toHaveLength(9);
+  });
+
+  it('registers no reference resources when an explicit selection omits reference', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ toolsets: new Set(['account']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    // Reference disabled → nothing registered, so the server never advertises
+    // the resources capability and resources/list is effectively empty.
+    expect(client.getServerCapabilities()?.resources).toBeUndefined();
+  });
+
+  it('setup mode (default toolsets) still registers the nine resources, but inert', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ setupMode: true, token: null, writes: false }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    const { resources } = await client.listResources();
+    expect(resources).toHaveLength(9);
+    // Inert: a read returns NOT_CONNECTED guidance and never touches the network.
+    const read = await client.readResource({ uri: 'labelgrid://reference/genres' });
+    const body = JSON.parse((read.contents[0] as { text: string }).text) as {
+      error?: { code?: string };
+    };
+    expect(body.error?.code).toBe('NOT_CONNECTED');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('setup mode with an explicit selection omitting reference registers no resources', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const client = await connectWithTools(
+      config({ setupMode: true, token: null, writes: false, toolsets: new Set(['account']) }),
+      fetchFn as unknown as typeof fetch,
+      allTools(),
+    );
+    expect(client.getServerCapabilities()?.resources).toBeUndefined();
+  });
+});
+
 describe('buildServer tool invocation', () => {
   it('returns the JSON payload from a successful get_account call', async () => {
     const account = { id: 8675309, name: 'sandbox account' };

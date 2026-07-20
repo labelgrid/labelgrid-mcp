@@ -131,8 +131,8 @@ describe('loadConfig toolsets', () => {
     expect(c.toolsets?.has('catalog')).toBe(true);
   });
 
-  it('translates legacy toolset names silently, with no warning', () => {
-    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+  it('translates legacy toolset names to their current toolset', () => {
+    vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     const c = loadConfig(
       baseEnv({ LABELGRID_TOOLSETS: 'identity,review,delivery,analytics,accounting' }),
     );
@@ -142,7 +142,36 @@ describe('loadConfig toolsets', () => {
       'insights',
       'releases',
     ]);
-    expect(err).not.toHaveBeenCalled();
+  });
+
+  it('warns loudly for every legacy toolset name, naming the toolset it maps to', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    loadConfig(baseEnv({ LABELGRID_TOOLSETS: 'identity,analytics,accounting' }));
+    const written = err.mock.calls.map((call) => String(call[0])).join('\n');
+    // Each legacy name is called out with the current toolset it maps to.
+    expect(written).toContain('identity');
+    expect(written).toContain('account');
+    expect(written).toContain('analytics');
+    expect(written).toContain('insights');
+    expect(written).toContain('accounting');
+    expect(written).toContain('finance');
+  });
+
+  it('the review/delivery warning names the read-only mitigation (releases has write tools)', () => {
+    for (const legacy of ['review', 'delivery']) {
+      const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+      loadConfig(baseEnv({ LABELGRID_TOOLSETS: legacy }));
+      const written = err.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(written).toContain(legacy);
+      expect(written).toContain('releases');
+      // The warning must name the write tools and both read-only mitigations.
+      expect(written).toContain('run_release_checks');
+      expect(written).toContain('manage_release_links');
+      expect(written).toContain('add_review_issue_note');
+      expect(written).toContain('LABELGRID_READ_ONLY=true');
+      expect(written).toContain('LABELGRID_ENABLE_WRITES=false');
+      vi.restoreAllMocks();
+    }
   });
 
   it('accepts the current eight toolset names without warning', () => {

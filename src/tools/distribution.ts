@@ -263,7 +263,7 @@ const confirmReview: ToolDef = {
   description:
     'Confirm a release that Preflight QC placed on hold, moving it into distribution review. Use after you have reviewed the quality report and accept the release as-is. Safe to repeat.',
   inputShape: { release_id: releaseId },
-  annotations: { idempotentHint: true },
+  annotations: { destructiveHint: true, idempotentHint: true },
   handler: (args, { client }) => client.post(`/releases/${args.release_id}/confirm-review`),
 };
 
