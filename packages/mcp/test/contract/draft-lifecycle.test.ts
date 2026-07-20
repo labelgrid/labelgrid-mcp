@@ -5,17 +5,18 @@
  * (with the required recording_country), validate it, then delete the track and
  * the release. It ALWAYS cleans up what it created (afterAll), even if an
  * assertion fails partway. It discovers the label/genre/artist it needs at
- * runtime, so nothing account-specific is committed. Gated on
- * LABELGRID_API_TOKEN; runs against the sandbox only, never production.
+ * runtime, so nothing account-specific is committed. Gated on BOTH
+ * LABELGRID_API_TOKEN and LABELGRID_API_URL (no production fallback); runs
+ * against the sandbox only, never production.
  */
 
+import { LabelGridClient } from '@labelgrid/core';
+import type { ApiResult } from '@labelgrid/core';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { ApiResult } from '../../src/api/http.js';
-import { LabelGridClient } from '../../src/api/http.js';
 import type { Config } from '../../src/config.js';
-import { catalogReadTools } from '../../src/tools/catalog-read.js';
+import { catalogTools } from '../../src/tools/catalog.js';
 import { referenceTools } from '../../src/tools/reference.js';
-import { releaseWriteTools } from '../../src/tools/release-write.js';
+import { releaseTools } from '../../src/tools/releases.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
 const TOKEN = process.env.LABELGRID_API_TOKEN;
@@ -63,17 +64,17 @@ function resourceId(r: ApiResult<unknown>): number | undefined {
 
 const ids: { releaseId?: number; trackId?: number } = {};
 
-describe.skipIf(!TOKEN)('draft lifecycle (sandbox)', () => {
+describe.skipIf(!TOKEN || !BASE_URL)('draft lifecycle (sandbox)', () => {
   afterAll(async () => {
     const ctx = context();
     if (ids.trackId !== undefined) {
-      await tool(releaseWriteTools, 'delete_track')
-        .handler({ track_id: ids.trackId }, ctx)
+      await tool(catalogTools, 'delete_catalog_item')
+        .handler({ entity: 'track', id: ids.trackId }, ctx)
         .catch(() => undefined);
     }
     if (ids.releaseId !== undefined) {
-      await tool(releaseWriteTools, 'delete_release')
-        .handler({ release_id: ids.releaseId }, ctx)
+      await tool(catalogTools, 'delete_catalog_item')
+        .handler({ entity: 'release', id: ids.releaseId }, ctx)
         .catch(() => undefined);
     }
   });
@@ -83,13 +84,13 @@ describe.skipIf(!TOKEN)('draft lifecycle (sandbox)', () => {
 
     // Discover a label, genre and artist from the account.
     const labels = collection(
-      await tool(catalogReadTools, 'list_labels').handler({ per_page: 5 }, ctx),
+      await tool(catalogTools, 'search_catalog').handler({ entity: 'label', per_page: 5 }, ctx),
     );
     const genres = collection(
       await tool(referenceTools, 'list_reference_data').handler({ type: 'genres' }, ctx),
     );
     const artists = collection(
-      await tool(catalogReadTools, 'list_artists').handler({ per_page: 5 }, ctx),
+      await tool(catalogTools, 'search_catalog').handler({ entity: 'artist', per_page: 5 }, ctx),
     );
     expect(labels.length).toBeGreaterThan(0);
     expect(genres.length).toBeGreaterThan(0);
@@ -100,8 +101,9 @@ describe.skipIf(!TOKEN)('draft lifecycle (sandbox)', () => {
     const releaseDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     // Create a DRAFT release (idempotency handled by the tool).
-    const created = await tool(releaseWriteTools, 'create_release').handler(
+    const created = await tool(catalogTools, 'create_catalog_item').handler(
       {
+        entity: 'release',
         fields: {
           content_type: 'Single',
           label_id: labelId,
@@ -119,15 +121,16 @@ describe.skipIf(!TOKEN)('draft lifecycle (sandbox)', () => {
     expect(ids.releaseId, `create_release failed: ${JSON.stringify(created)}`).toBeDefined();
 
     // Edit it.
-    const updated = await tool(releaseWriteTools, 'update_release').handler(
-      { release_id: ids.releaseId, fields: { cat: `MCP-${Date.now()}-v2` } },
+    const updated = await tool(catalogTools, 'update_catalog_item').handler(
+      { entity: 'release', id: ids.releaseId, fields: { cat: `MCP-${Date.now()}-v2` } },
       ctx,
     );
     expect('error' in updated).toBe(false);
 
     // Add a track with the required recording_country.
-    const track = await tool(releaseWriteTools, 'create_track').handler(
+    const track = await tool(catalogTools, 'create_catalog_item').handler(
       {
+        entity: 'track',
         fields: {
           release_id: ids.releaseId,
           disc: 1,
@@ -148,12 +151,12 @@ describe.skipIf(!TOKEN)('draft lifecycle (sandbox)', () => {
     ids.trackId = resourceId(track);
 
     // Validate: a draft with no audio/artwork must NOT pass cleanly.
-    const validated = await tool(releaseWriteTools, 'validate_release').handler(
-      { release_id: ids.releaseId },
+    const validated = await tool(releaseTools, 'run_release_checks').handler(
+      { release_id: ids.releaseId, check: 'validate' },
       ctx,
     );
     const problems = validationProblems(validated);
-    expect(problems, `validate_release returned no problems: ${JSON.stringify(validated)}`).toBe(
+    expect(problems, `run_release_checks returned no problems: ${JSON.stringify(validated)}`).toBe(
       true,
     );
   });
