@@ -2,8 +2,21 @@ name: Publish
 
 # Publishes to npm via trusted publishing (GitHub OIDC + provenance) when a
 # GitHub Release is published. No long-lived npm token is stored — the registry
-# verifies the workflow's OIDC identity. Requires the npm package's trusted
-# publisher to be configured for this repo + workflow.
+# verifies the workflow's OIDC identity.
+#
+# Multi-package: the workspace publishes @labelgrid/core, @labelgrid/mcp and
+# @labelgrid/cli from this one workflow. Each package's publish is guarded by
+# a version-already-on-registry check (so re-running a release never double-
+# publishes), and the steps run strictly in dependency order — core first,
+# then the packages that depend on it (mcp, cli). Every publish step is
+# `continue-on-error: false`: if the core publish fails, nothing that depends
+# on it is published.
+#
+# REQUIRED SETUP: each package's npm "trusted publisher" must be configured
+# (npmjs.com → the package → Settings → Trusted publishers) for this repo and
+# this workflow file BEFORE its first release from here. @labelgrid/mcp is
+# configured; @labelgrid/core and @labelgrid/cli must be added before their
+# first release, or their publish steps will fail the OIDC exchange.
 
 on:
   release:
@@ -37,7 +50,25 @@ jobs:
         run: npm run leak-guard
       - name: Update npm for trusted publishing
         run: npm install -g npm@11.18.0 && npm --version
-      - name: Skip if this version is already on the registry
+
+      # ---- @labelgrid/core (published first — mcp and cli depend on it) ----
+      - name: Skip if @labelgrid/core is already on the registry
+        id: check_core
+        run: |
+          VERSION=$(node -p "require('./packages/core/package.json').version")
+          if npm view "@labelgrid/core@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "@labelgrid/core@$VERSION already published — skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish @labelgrid/core to npm (provenance)
+        if: steps.check_core.outputs.published == 'false'
+        continue-on-error: false
+        run: npm publish -w @labelgrid/core --provenance --access public
+
+      # ---- @labelgrid/mcp ----
+      - name: Skip if @labelgrid/mcp is already on the registry
         id: check
         run: |
           VERSION=$(node -p "require('./packages/mcp/package.json').version")
@@ -47,9 +78,9 @@ jobs:
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
-      # @labelgrid/mcp depends on the workspace package @labelgrid/core. Until the
-      # multi-package publish lands, fail closed rather than publish a server whose
-      # dependency cannot be installed from the registry.
+      # Fail closed rather than publish a server whose @labelgrid/core
+      # dependency cannot be installed from the registry (e.g. the core publish
+      # above was skipped against a version that never shipped).
       - name: Preflight — the @labelgrid/core dependency must be on the registry
         if: steps.check.outputs.published == 'false'
         run: |
@@ -58,9 +89,35 @@ jobs:
             echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
             exit 1
           fi
-      - name: Publish to npm (provenance)
+      - name: Publish @labelgrid/mcp to npm (provenance)
         if: steps.check.outputs.published == 'false'
+        continue-on-error: false
         run: npm publish -w @labelgrid/mcp --provenance --access public
+
+      # ---- @labelgrid/cli (after core — it depends on it) ----
+      - name: Skip if @labelgrid/cli is already on the registry
+        id: check_cli
+        run: |
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "@labelgrid/cli@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "@labelgrid/cli@$VERSION already published — skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Same fail-closed preflight for the CLI's @labelgrid/core dependency.
+      - name: Preflight — the CLI's @labelgrid/core dependency must be on the registry
+        if: steps.check_cli.outputs.published == 'false'
+        run: |
+          CORE_VERSION=$(node -p "require('./packages/cli/package.json').dependencies['@labelgrid/core']")
+          if ! npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
+            echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
+            exit 1
+          fi
+      - name: Publish @labelgrid/cli to npm (provenance)
+        if: steps.check_cli.outputs.published == 'false'
+        continue-on-error: false
+        run: npm publish -w @labelgrid/cli --provenance --access public
 
   # Separate job so its contents:write scope never mixes with the publish job's
   # id-token:write (trusted publishing). Builds the Claude Desktop one-click
