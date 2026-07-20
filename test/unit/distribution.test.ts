@@ -75,7 +75,7 @@ describe('distribution toolset shape', () => {
     }
   });
 
-  it('marks the destructive tools with destructiveHint and confirm_review idempotent', () => {
+  it('marks the destructive tools with destructiveHint; confirm_review is both destructive and idempotent', () => {
     for (const name of [
       'delete_asset',
       'manage_track_license',
@@ -85,6 +85,9 @@ describe('distribution toolset shape', () => {
     ]) {
       expect(byName(name).annotations.destructiveHint).toBe(true);
     }
+    // confirm_review has an irreversible consequence (destructiveHint) AND is
+    // safe to repeat (idempotentHint) — both true.
+    expect(byName('confirm_review').annotations.destructiveHint).toBe(true);
     expect(byName('confirm_review').annotations.idempotentHint).toBe(true);
   });
 

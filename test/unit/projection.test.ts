@@ -31,23 +31,52 @@ describe('projectConcise', () => {
     expect((out.items as Record<string, unknown>[])[0]._projection).toBeUndefined();
   });
 
-  it('walks pagination envelopes: container keys survive, their leaves are filtered', () => {
+  it('preserves meta/links pagination envelopes verbatim while filtering data rows', () => {
     const out = projectConcise(
       {
         data: [
           { id: 1, title: 'A', internal_note: 'drop me' },
           { id: 2, title: 'B', internal_note: 'drop me too' },
         ],
-        meta: { current_page: 1 },
+        links: { next: 'https://api.test/next', prev: 'https://api.test/prev' },
+        meta: { current_page: 1, total: 50, per_page: 25 },
       },
       ['title'],
     ) as Record<string, unknown>;
+    // Data rows are still filtered to the allowlist (+ ids).
     expect(out.data).toEqual([
       { id: 1, title: 'A' },
       { id: 2, title: 'B' },
     ]);
-    // meta is a container so the walk keeps the key; its non-allowlisted leaves go.
-    expect(out.meta).toEqual({});
+    // meta and links keep EVERY field verbatim — no allowlist filtering.
+    expect(out.links).toEqual({ next: 'https://api.test/next', prev: 'https://api.test/prev' });
+    expect(out.meta).toEqual({ current_page: 1, total: 50, per_page: 25 });
+  });
+
+  it('preserves a nested meta/links subtree verbatim at any depth', () => {
+    const out = projectConcise(
+      { result: { data: [{ id: 1, junk: 'x' }], meta: { total: 3, per_page: 1 } } },
+      [],
+    ) as Record<string, unknown>;
+    const result = out.result as Record<string, unknown>;
+    expect(result.data).toEqual([{ id: 1 }]);
+    expect(result.meta).toEqual({ total: 3, per_page: 1 });
+  });
+
+  it('preserves top-level primitive cursor keys (next_cursor/prev_cursor/cursor)', () => {
+    const out = projectConcise(
+      {
+        data: [{ id: 1, title: 'A', junk: 'x' }],
+        next_cursor: 'abc',
+        prev_cursor: 'zyx',
+        cursor: 'here',
+      },
+      ['title'],
+    ) as Record<string, unknown>;
+    expect(out.next_cursor).toBe('abc');
+    expect(out.prev_cursor).toBe('zyx');
+    expect(out.cursor).toBe('here');
+    expect(out.data).toEqual([{ id: 1, title: 'A' }]);
   });
 
   it('projects a top-level array element-wise without a marker', () => {

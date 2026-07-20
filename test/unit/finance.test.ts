@@ -81,6 +81,19 @@ describe('query_financials', () => {
     expect(url).toContain('filter[start_date]=2026-01-01');
   });
 
+  it('view=statements forwards page and per_page (and filters) into the query string', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('query_financials').handler(
+      { view: 'statements', page: 2, per_page: 50, filters: { label_id: 42 } },
+      ctx,
+    );
+    const url = lastUrl(fetchFn);
+    expect(url).toContain('/statements');
+    expect(url).toContain('page=2');
+    expect(url).toContain('per_page=50');
+    expect(url).toContain('filter[label_id]=42');
+  });
+
   it('view=statement_detail → GET /statements/{invoiceNumber}', async () => {
     const { fetchFn, ctx } = harness();
     await byName('query_financials').handler(

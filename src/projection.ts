@@ -14,6 +14,12 @@
  * Kept values are recursed into. A `"_projection": "concise"` marker is
  * appended at the TOP level only (when the top level is an object).
  *
+ * Pagination fidelity: a subtree keyed exactly `meta` or `links` (at ANY depth)
+ * is preserved VERBATIM — every field, unfiltered — so page counts, totals and
+ * next/prev links always survive. Top-level primitive cursor keys
+ * (`next_cursor`, `prev_cursor`, `cursor`) are likewise preserved so
+ * cursor-paginated responses stay pageable under concise mode.
+ *
  * Projection is presentation-only — it never transforms values. The 400K
  * toToolResult cap stays as the backstop for anything projection cannot tame.
  */
@@ -81,17 +87,36 @@ export const CONCISE_ALLOWLISTS: Record<string, readonly string[]> = {
   ],
 };
 
+/** Subtrees whose entire contents are kept verbatim, at any depth. */
+const VERBATIM_ENVELOPE_KEYS: ReadonlySet<string> = new Set(['meta', 'links']);
+/** Primitive cursor keys preserved at the TOP level only. */
+const TOP_LEVEL_CURSOR_KEYS: ReadonlySet<string> = new Set([
+  'next_cursor',
+  'prev_cursor',
+  'cursor',
+]);
+
 function isContainer(value: unknown): value is Record<string, unknown> | unknown[] {
   return value !== null && typeof value === 'object';
 }
 
-function projectValue(value: unknown, keep: ReadonlySet<string>): unknown {
+function projectValue(value: unknown, keep: ReadonlySet<string>, topLevel = false): unknown {
   if (Array.isArray(value)) {
     return value.map((item) => projectValue(item, keep));
   }
   if (isContainer(value)) {
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
+      // Pagination envelopes: a `meta`/`links` subtree is kept verbatim, unfiltered.
+      if (VERBATIM_ENVELOPE_KEYS.has(key)) {
+        out[key] = item;
+        continue;
+      }
+      // Top-level primitive cursor keys survive so pagination isn't lost.
+      if (topLevel && TOP_LEVEL_CURSOR_KEYS.has(key) && !isContainer(item)) {
+        out[key] = item;
+        continue;
+      }
       if (keep.has(key) || key === 'id' || key.endsWith('_id') || isContainer(item)) {
         out[key] = isContainer(item) ? projectValue(item, keep) : item;
       }
@@ -108,7 +133,7 @@ function projectValue(value: unknown, keep: ReadonlySet<string>): unknown {
  */
 export function projectConcise(value: unknown, keep: readonly string[]): unknown {
   const keepSet = new Set(keep);
-  const projected = projectValue(value, keepSet);
+  const projected = projectValue(value, keepSet, true);
   if (isContainer(projected) && !Array.isArray(projected)) {
     return { ...projected, _projection: 'concise' };
   }

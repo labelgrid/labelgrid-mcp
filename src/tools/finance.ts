@@ -186,6 +186,8 @@ const queryFinancials: ToolDef = {
     if (view === 'statements') {
       result = await client.get('/statements', {
         group_by: args.group_by,
+        page: args.page,
+        per_page: args.per_page,
         filter: args.filters,
       });
     } else if (view === 'statement_detail') {
