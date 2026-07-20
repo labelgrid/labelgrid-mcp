@@ -1,0 +1,181 @@
+/**
+ * Per-invocation context: global-flag parsing, token resolution, and the core
+ * client. Every dependency with a side effect (client construction, credential
+ * store, streams, confirmation input) is injectable so unit tests run the real
+ * command wiring against stubs with no live network.
+ *
+ * Token resolution order (the documented contract):
+ *   1. LABELGRID_API_TOKEN environment variable
+ *   2. the token stored by `labelgrid auth login`
+ *   3. the --token flag (for CI)
+ */
+
+import { LabelGridClient } from '@labelgrid/core';
+import type { TokenStore } from './credentials.js';
+import { defaultTokenStore } from './credentials.js';
+import { CliError } from './errors.js';
+import type { Output, Sink } from './output.js';
+import { printApiError } from './output.js';
+import { VERSION } from './version.js';
+
+export const DEFAULT_BASE_URL = 'https://api.labelgrid.com/api/public';
+
+/**
+ * The structural subset of {@link LabelGridClient} the commands use. A Pick of
+ * the class keeps only the public methods, so a plain-object test stub is
+ * assignable.
+ */
+export type CliClient = Pick<
+  LabelGridClient,
+  'get' | 'post' | 'patch' | 'put' | 'delete' | 'postMultipart' | 'raw'
+>;
+
+export type ClientOpts = { baseUrl: string; token: string };
+
+export type CliDeps = {
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  stdout?: Sink;
+  stderr?: Sink;
+  tokenStore?: TokenStore;
+  createClient?: (opts: ClientOpts) => CliClient;
+  /** Reads one line of confirmation input (defaults to stdin). */
+  readLine?: () => Promise<string>;
+};
+
+/** The global flags commander collects on the root command. */
+export type GlobalOpts = {
+  json?: boolean;
+  token?: string;
+  apiUrl?: string;
+  yes?: boolean;
+};
+
+export type Resolved = {
+  env: NodeJS.ProcessEnv;
+  stdout: Sink;
+  stderr: Sink;
+  tokenStore: TokenStore;
+  createClient: (opts: ClientOpts) => CliClient;
+  readLine: () => Promise<string>;
+};
+
+function defaultReadLine(): Promise<string> {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+    let buffer = '';
+    const finish = (): void => {
+      stdin.off('data', onData);
+      stdin.off('end', onEnd);
+      stdin.pause();
+      resolve(buffer);
+    };
+    const onData = (chunk: Buffer): void => {
+      buffer += chunk.toString('utf8');
+      const nl = buffer.indexOf('\n');
+      if (nl !== -1) {
+        buffer = buffer.slice(0, nl);
+        finish();
+      }
+    };
+    const onEnd = (): void => finish();
+    stdin.on('data', onData);
+    stdin.on('end', onEnd);
+    stdin.resume();
+  });
+}
+
+/** Fills every optional dependency with its real default. */
+export function resolveDeps(deps: CliDeps): Resolved {
+  const env = deps.env ?? process.env;
+  const platform = deps.platform ?? process.platform;
+  return {
+    env,
+    stdout: deps.stdout ?? process.stdout,
+    stderr: deps.stderr ?? process.stderr,
+    tokenStore: deps.tokenStore ?? defaultTokenStore(env, platform),
+    createClient:
+      deps.createClient ??
+      ((opts: ClientOpts): CliClient =>
+        new LabelGridClient({
+          baseUrl: opts.baseUrl,
+          token: opts.token,
+          version: VERSION,
+          userAgent: `labelgrid-cli/${VERSION}`,
+        })),
+    readLine: deps.readLine ?? defaultReadLine,
+  };
+}
+
+export type TokenResolution = { token: string; source: 'env' | 'stored' | 'flag' } | null;
+
+/** Applies the env > stored > --token resolution order. */
+export function resolveToken(
+  env: NodeJS.ProcessEnv,
+  store: TokenStore,
+  flagToken: string | undefined,
+): TokenResolution {
+  const fromEnv = env.LABELGRID_API_TOKEN?.trim();
+  if (fromEnv !== undefined && fromEnv.length > 0) return { token: fromEnv, source: 'env' };
+  const stored = store.load();
+  if (stored !== null) return { token: stored, source: 'stored' };
+  if (flagToken !== undefined && flagToken.trim().length > 0) {
+    return { token: flagToken.trim(), source: 'flag' };
+  }
+  return null;
+}
+
+/** Resolves the API base URL: --api-url flag > LABELGRID_API_URL env > default. */
+export function resolveBaseUrl(env: NodeJS.ProcessEnv, flagUrl: string | undefined): string {
+  if (flagUrl !== undefined && flagUrl.trim().length > 0) return flagUrl.trim();
+  const fromEnv = env.LABELGRID_API_URL?.trim();
+  if (fromEnv !== undefined && fromEnv.length > 0) return fromEnv;
+  return DEFAULT_BASE_URL;
+}
+
+export type CommandContext = {
+  client: CliClient;
+  out: Output;
+  yes: boolean;
+  baseUrl: string;
+  token: string;
+  readLine: () => Promise<string>;
+};
+
+/** Builds the output sink for commands that never need a client (auth login…). */
+export function buildOutput(resolved: Resolved, globals: GlobalOpts, secrets: string[]): Output {
+  return {
+    json: globals.json === true,
+    stdout: resolved.stdout,
+    stderr: resolved.stderr,
+    secrets,
+  };
+}
+
+/**
+ * Builds the full authenticated context, or prints a structured NO_TOKEN error
+ * and throws (exit 1) when no token can be resolved.
+ */
+export function buildContext(resolved: Resolved, globals: GlobalOpts): CommandContext {
+  const resolution = resolveToken(resolved.env, resolved.tokenStore, globals.token);
+  const secrets: string[] = resolution === null ? [] : [resolution.token];
+  const out = buildOutput(resolved, globals, secrets);
+  if (resolution === null) {
+    printApiError(out, {
+      code: 'NO_TOKEN',
+      message:
+        'No API token found. Set LABELGRID_API_TOKEN, run `labelgrid auth login`, or pass --token.',
+      status: 0,
+    });
+    throw new CliError(1);
+  }
+  const baseUrl = resolveBaseUrl(resolved.env, globals.apiUrl);
+  return {
+    client: resolved.createClient({ baseUrl, token: resolution.token }),
+    out,
+    yes: globals.yes === true,
+    baseUrl,
+    token: resolution.token,
+    readLine: resolved.readLine,
+  };
+}
