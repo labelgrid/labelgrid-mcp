@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.labelgrid/labelgrid-mcp",
   "description": "Official LabelGrid MCP server — manage your music catalog, releases, analytics and distribution.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "websiteUrl": "https://labelgrid.com",
   "repository": {
     "url": "https://github.com/labelgrid/labelgrid-mcp",
@@ -12,7 +12,7 @@
     {
       "registryType": "npm",
       "identifier": "@labelgrid/mcp",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "transport": {
         "type": "stdio"
       },
@@ -50,7 +50,7 @@
         },
         {
           "name": "LABELGRID_TOOLSETS",
-          "description": "Comma-separated subset of toolsets to expose (identity, reference, catalog, releases, review, analytics, accounting, delivery, webhooks, distribution). Defaults to all.",
+          "description": "Comma-separated subset of toolsets to expose (account, reference, catalog, releases, insights, finance, webhooks, distribution; pre-0.3.0 names are accepted as aliases). Defaults to all except webhooks, which must be named explicitly to enable.",
           "isRequired": false,
           "format": "string"
         },
