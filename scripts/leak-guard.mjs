@@ -49,8 +49,8 @@ const SKIP_FILES = new Set(['packages/mcp/test/fixtures/openapi.json']);
 const LOCAL_FILE_RE = /\.local\.[cm]?[jt]s$/;
 
 // Extensions/roots that ARE scanned. `packages` covers every workspace's
-// sources, tests, manifests and docs.
-const SCAN_DIRS = ['packages', 'scripts'];
+// sources, tests, manifests and docs; `skills` covers the public agent skills.
+const SCAN_DIRS = ['packages', 'scripts', 'skills'];
 const ROOT_FILE_RE = /\.(md|json)$/i; // root-level *.md + *.json manifests
 
 function extractAllowed(line) {

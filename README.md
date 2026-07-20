@@ -29,6 +29,15 @@ labelgrid auth whoami                  # verify the token
 labelgrid catalog search --type release --json | jq '.data[].id'
 ```
 
+## Agent skill
+
+[`skills/labelgrid-release/SKILL.md`](./skills/labelgrid-release/SKILL.md) is an agent
+skill for the full release lifecycle — draft a release and its tracks, upload audio and
+artwork, validate, review, distribute, and track delivery — with the exact MCP tool and
+CLI command for each step and guidance on which vehicle fits. Point an agent at the file,
+or drop it into your assistant's skills directory, to teach it the end-to-end LabelGrid
+release flow.
+
 ## Layout & build arrangement
 
 - The root `package.json` is a **private workspaces manifest**; its scripts fan out to the
