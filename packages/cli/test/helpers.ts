@@ -96,6 +96,12 @@ export type RunOpts = {
   answer?: string;
   stub?: { client: CliClient; calls: Call[] };
   clientCfg?: StubCfg;
+  /** Whether stdin is treated as an interactive terminal (default false). */
+  stdinIsTTY?: boolean;
+  /** The hidden-input reader used on the TTY login path. */
+  readSecret?: () => Promise<string>;
+  /** Overrides client construction (e.g. to throw an unexpected error). */
+  createClient?: (opts: ClientOpts) => CliClient;
 };
 
 export type RunResult = {
@@ -121,9 +127,13 @@ export async function run(argv: string[], opts: RunOpts = {}): Promise<RunResult
     tokenStore: store,
     createClient: (o) => {
       clientOpts.push(o);
+      if (opts.createClient !== undefined) return opts.createClient(o);
       return stub.client;
     },
     readLine: async () => opts.answer ?? '',
+    // Default to non-TTY so tests never touch the real terminal; opt in per test.
+    stdinIsTTY: opts.stdinIsTTY ?? false,
+    readSecret: opts.readSecret ?? (async () => opts.answer ?? ''),
   });
   return { code, stdout: stdout.text, stderr: stderr.text, calls: stub.calls, clientOpts, store };
 }

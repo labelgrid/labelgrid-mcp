@@ -21,6 +21,29 @@ describe('auth login/logout', () => {
     expect(r.stdout).not.toContain('piped-tok');
   });
 
+  it('login on a TTY reads the token with echo disabled and never echoes it', async () => {
+    const store = memoryStore();
+    let readSecretCalled = false;
+    const r = await run(['auth', 'login'], {
+      env: {},
+      store,
+      stdinIsTTY: true,
+      readSecret: async () => {
+        readSecretCalled = true;
+        return '  hidden-tok  ';
+      },
+    });
+    expect(r.code).toBe(0);
+    // The hidden reader (echo-mute seam), not the plain line reader, was used.
+    expect(readSecretCalled).toBe(true);
+    expect(store.token).toBe('hidden-tok');
+    // The prompt announces hidden entry, and the token never reaches any stream.
+    expect(r.stderr).toContain('input hidden');
+    expect(r.stdout).not.toContain('hidden-tok');
+    expect(r.stderr).not.toContain('hidden-tok');
+    expect(r.calls).toHaveLength(0); // purely local
+  });
+
   it('login with an empty input fails with NO_TOKEN', async () => {
     const store = memoryStore();
     const r = await run(['auth', 'login'], { env: {}, store, answer: '' });

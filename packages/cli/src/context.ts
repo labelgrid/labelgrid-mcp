@@ -16,6 +16,7 @@ import { defaultTokenStore } from './credentials.js';
 import { CliError } from './errors.js';
 import type { Output, Sink } from './output.js';
 import { printApiError } from './output.js';
+import { defaultReadSecret } from './secret-input.js';
 import { VERSION } from './version.js';
 
 export const DEFAULT_BASE_URL = 'https://api.labelgrid.com/api/public';
@@ -41,6 +42,10 @@ export type CliDeps = {
   createClient?: (opts: ClientOpts) => CliClient;
   /** Reads one line of confirmation input (defaults to stdin). */
   readLine?: () => Promise<string>;
+  /** True when stdin is an interactive terminal (enables hidden token entry). */
+  stdinIsTTY?: boolean;
+  /** Reads the login token with terminal echo disabled (defaults to raw stdin). */
+  readSecret?: () => Promise<string>;
 };
 
 /** The global flags commander collects on the root command. */
@@ -58,6 +63,8 @@ export type Resolved = {
   tokenStore: TokenStore;
   createClient: (opts: ClientOpts) => CliClient;
   readLine: () => Promise<string>;
+  stdinIsTTY: boolean;
+  readSecret: () => Promise<string>;
 };
 
 function defaultReadLine(): Promise<string> {
@@ -104,6 +111,8 @@ export function resolveDeps(deps: CliDeps): Resolved {
           userAgent: `labelgrid-cli/${VERSION}`,
         })),
     readLine: deps.readLine ?? defaultReadLine,
+    stdinIsTTY: deps.stdinIsTTY ?? process.stdin.isTTY === true,
+    readSecret: deps.readSecret ?? defaultReadSecret,
   };
 }
 

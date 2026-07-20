@@ -10,7 +10,7 @@
  * token was stored/cleared.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -29,35 +29,72 @@ export type TokenStore = {
 const KEYCHAIN_SERVICE = 'labelgrid-cli';
 const KEYCHAIN_ACCOUNT = 'token';
 
+/**
+ * The `security` invocations the Keychain store needs, as an injectable seam
+ * so the store's token-handling can be unit-tested without touching the real
+ * Keychain.
+ */
+export type SecurityRunner = {
+  /** Runs `security <args>` capturing stdout; throws on a non-zero exit. */
+  capture(args: string[]): string;
+  /** Runs `security <args>` feeding `stdin`; returns the child's exit status. */
+  feed(args: string[], stdin: string): { status: number | null; error?: Error };
+};
+
+const defaultSecurityRunner: SecurityRunner = {
+  capture(args) {
+    return execFileSync('security', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  },
+  feed(args, stdin) {
+    const res = spawnSync('security', args, {
+      input: stdin,
+      encoding: 'utf8',
+      stdio: ['pipe', 'ignore', 'ignore'],
+    });
+    return { status: res.status, error: res.error };
+  },
+};
+
+/**
+ * Escapes a value as a single argument for `security -i`'s interactive-command
+ * tokenizer. That tokenizer treats whitespace, quotes and backslash specially
+ * and escapes the character after a backslash in every context (it is NOT a
+ * POSIX shell — the `'\''` idiom is unsupported), so backslash-escaping each
+ * non-word byte yields exactly the original value as one argument.
+ */
+export function escapeSecurityArg(value: string): string {
+  return value.replace(/[^A-Za-z0-9._@%+=:,/-]/g, (c) => `\\${c}`);
+}
+
 /** macOS Keychain store via the `security` CLI. */
-export function keychainStore(): TokenStore {
-  const run = (args: string[]): string =>
-    execFileSync('security', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+export function keychainStore(runner: SecurityRunner = defaultSecurityRunner): TokenStore {
   return {
     save(token: string): string {
-      // -U updates an existing item in place instead of failing on a duplicate.
-      run([
-        'add-generic-password',
-        '-U',
-        '-s',
-        KEYCHAIN_SERVICE,
-        '-a',
-        KEYCHAIN_ACCOUNT,
-        '-w',
+      // The token is written to `security -i` over STDIN, never as a process
+      // argument, so it can't leak through the process table / argv. -U updates
+      // an existing item in place instead of failing on a duplicate.
+      const command = `add-generic-password -U -s ${KEYCHAIN_SERVICE} -a ${KEYCHAIN_ACCOUNT} -w ${escapeSecurityArg(
         token,
-      ]);
+      )}\n`;
+      const { status, error } = runner.feed(['-i'], command);
+      if (error !== undefined) {
+        throw new Error('Keychain write failed: could not run the security command.');
+      }
+      if (status !== 0) {
+        throw new Error(
+          `Keychain write failed: security exited with status ${status ?? 'unknown'}.`,
+        );
+      }
       return this.describe();
     },
     load(): string | null {
       try {
-        const out = run([
-          'find-generic-password',
-          '-s',
-          KEYCHAIN_SERVICE,
-          '-a',
-          KEYCHAIN_ACCOUNT,
-          '-w',
-        ]).trim();
+        const out = runner
+          .capture(['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT, '-w'])
+          .trim();
         return out.length > 0 ? out : null;
       } catch {
         return null;
@@ -65,7 +102,7 @@ export function keychainStore(): TokenStore {
     },
     clear(): boolean {
       try {
-        run(['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT]);
+        runner.capture(['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT]);
         return true;
       } catch {
         return false;

@@ -11,11 +11,23 @@ import type { Command } from 'commander';
 import { confirmOrAbort } from '../confirm.js';
 import type { GlobalOpts, Resolved } from '../context.js';
 import { buildContext, buildOutput } from '../context.js';
-import { CliError } from '../errors.js';
+import { CliError, scrubErrorMessage } from '../errors.js';
 import { printApiError, printLine } from '../output.js';
 import { runApi } from '../run.js';
 
 async function readTokenInput(resolved: Resolved): Promise<string> {
+  if (resolved.stdinIsTTY) {
+    // Interactive terminal: read with echo disabled so the pasted token never
+    // appears on screen. The reader writes nothing; we print the prompt and,
+    // after entry, the newline the muted Enter key does not produce.
+    resolved.stderr.write('Paste your API token (input hidden): ');
+    try {
+      return (await resolved.readSecret()).trim();
+    } finally {
+      resolved.stderr.write('\n');
+    }
+  }
+  // Piped / non-TTY stdin: read one line, unchanged.
   resolved.stderr.write('Paste your API token (or pipe it via stdin): ');
   return (await resolved.readLine()).trim();
 }
@@ -28,7 +40,15 @@ export function registerAuth(program: Command, resolved: Resolved): void {
     .description('Store an API token (macOS Keychain, or a 0600 credentials file elsewhere)')
     .action(async (_opts: unknown, cmd: Command) => {
       const globals = cmd.optsWithGlobals<GlobalOpts>();
-      const token = globals.token ?? (await readTokenInput(resolved));
+      let token: string;
+      try {
+        token = globals.token ?? (await readTokenInput(resolved));
+      } catch (err) {
+        // Hidden-input read failed/aborted — surface a scrubbed one-liner.
+        const message = err instanceof Error ? err.message : 'Token entry failed.';
+        resolved.stderr.write(`UNEXPECTED_ERROR: ${scrubErrorMessage(message, globals.token)}\n`);
+        throw new CliError(1);
+      }
       const out = buildOutput(resolved, globals, [token]);
       if (token.length === 0) {
         printApiError(out, {
@@ -38,7 +58,15 @@ export function registerAuth(program: Command, resolved: Resolved): void {
         });
         throw new CliError(1);
       }
-      const where = resolved.tokenStore.save(token);
+      let where: string;
+      try {
+        where = resolved.tokenStore.save(token);
+      } catch (err) {
+        // Never let a storage error echo the token; scrub with it in context.
+        const message = err instanceof Error ? err.message : 'Token storage failed.';
+        resolved.stderr.write(`UNEXPECTED_ERROR: ${scrubErrorMessage(message, token)}\n`);
+        throw new CliError(1);
+      }
       printLine(out, `Token stored in ${where}. Run \`labelgrid auth whoami\` to verify.`);
     });
 

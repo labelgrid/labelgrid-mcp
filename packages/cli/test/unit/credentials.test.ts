@@ -2,7 +2,14 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { credentialsFilePath, defaultTokenStore, fileStore } from '../../src/credentials.js';
+import {
+  type SecurityRunner,
+  credentialsFilePath,
+  defaultTokenStore,
+  escapeSecurityArg,
+  fileStore,
+  keychainStore,
+} from '../../src/credentials.js';
 
 let dir: string;
 beforeAll(() => {
@@ -51,5 +58,79 @@ describe('store selection', () => {
   it('darwin uses the Keychain-backed store', () => {
     const store = defaultTokenStore({}, 'darwin');
     expect(store.describe()).toContain('Keychain');
+  });
+});
+
+describe('keychainStore — token never passes through argv', () => {
+  type Feed = { args: string[]; stdin: string };
+
+  function stubRunner(feedResult: { status: number | null; error?: Error }): {
+    runner: SecurityRunner;
+    feeds: Feed[];
+  } {
+    const feeds: Feed[] = [];
+    const runner: SecurityRunner = {
+      capture: () => '',
+      feed: (args, stdin) => {
+        feeds.push({ args, stdin });
+        return feedResult;
+      },
+    };
+    return { runner, feeds };
+  }
+
+  it('writes the token via `security -i` STDIN, not as an argument', () => {
+    const { runner, feeds } = stubRunner({ status: 0 });
+    const token = 'tok-abc-123'; // word-safe: escaped form equals the raw token
+    keychainStore(runner).save(token);
+
+    expect(feeds).toHaveLength(1);
+    const feed = feeds[0];
+    // Interactive mode only — no add-generic-password / token in the argv.
+    expect(feed.args).toEqual(['-i']);
+    expect(feed.args.join(' ')).not.toContain(token);
+    // The command (with the token) is delivered over stdin.
+    expect(feed.stdin).toContain('add-generic-password -U -s labelgrid-cli -a token -w ');
+    expect(feed.stdin).toContain(token);
+  });
+
+  it('single-argument-escapes a token with special characters for the stdin command', () => {
+    const { runner, feeds } = stubRunner({ status: 0 });
+    const token = 'ab\'cd ef$gh"ij'; // quote, space, dollar, double-quote
+    keychainStore(runner).save(token);
+
+    const feed = feeds[0];
+    expect(feed.args).toEqual(['-i']);
+    // The escaped form (never the raw token) appears in the stdin payload.
+    expect(feed.stdin).toContain(`-w ${escapeSecurityArg(token)}`);
+    expect(feed.stdin).not.toContain(`-w ${token}`);
+    // And the raw token is never in the args array.
+    expect(feed.args.join(' ')).not.toContain(token);
+  });
+
+  it('a failing child produces an error that does NOT contain the token', () => {
+    const secret = 'super-secret-token-value';
+    const { runner } = stubRunner({ status: 1 });
+    expect(() => keychainStore(runner).save(secret)).toThrow(/Keychain write failed/);
+    try {
+      keychainStore(runner).save(secret);
+      expect.unreachable('save should have thrown');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(secret);
+    }
+  });
+
+  it('a spawn error also produces a token-free error', () => {
+    const secret = 'another-secret-token';
+    const runner: SecurityRunner = {
+      capture: () => '',
+      feed: () => ({ status: null, error: new Error(`spawn failed for ${secret}`) }),
+    };
+    try {
+      keychainStore(runner).save(secret);
+      expect.unreachable('save should have thrown');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(secret);
+    }
   });
 });
