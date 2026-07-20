@@ -8,4 +8,5 @@ dist/
 tmp/
 .impeccable/
 mcpb/build/
+mcpb/deps/
 labelgrid.mcpb

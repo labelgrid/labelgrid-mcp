@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * One-shot helper: fetch the public OpenAPI document and write it to
- * test/fixtures/openapi.json for use as the tool-schema reference and by the
- * API-coverage drift check.
+ * packages/mcp/test/fixtures/openapi.json for use as the tool-schema reference
+ * and by the API-coverage drift check.
  *
  * The document is the public, customer-facing API spec. The base defaults to
  * production; override with LABELGRID_OPENAPI_URL for another environment.
@@ -11,9 +11,13 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const url = process.env.LABELGRID_OPENAPI_URL ?? 'https://api.labelgrid.com/docs/api.json';
-const out = resolve(process.env.OPENAPI_OUT ?? 'test/fixtures/openapi.json');
+const out = resolve(
+  process.env.OPENAPI_OUT ?? resolve(repoRoot, 'packages/mcp/test/fixtures/openapi.json'),
+);
 
 const res = await fetch(url, { headers: { Accept: 'application/json' } });
 if (!res.ok) {

@@ -1,9 +1,9 @@
-node_modules
-dist
-mcpb/build
+**/node_modules
+**/dist
+mcpb
 labelgrid.mcpb
-test
+**/test
 .github
 .git
-*.md
+**/*.md
 .env*

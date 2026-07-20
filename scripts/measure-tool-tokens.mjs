@@ -24,23 +24,25 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 const BUDGET_TOKENS = 8000;
 
-async function importDist(rel) {
-  const url = pathToFileURL(resolve(`dist/${rel}`)).href;
+const PACKAGES = resolve(new URL('.', import.meta.url).pathname, '../packages');
+
+async function importDist(pkg, rel) {
+  const url = pathToFileURL(resolve(PACKAGES, pkg, 'dist', rel)).href;
   try {
     return await import(url);
   } catch {
     console.error(
-      `measure-tool-tokens: could not import dist/${rel} — run \`npm run build\` first.`,
+      `measure-tool-tokens: could not import packages/${pkg}/dist/${rel} — run \`npm run build\` first.`,
     );
     process.exit(1);
   }
 }
 
 async function main() {
-  const { allTools } = await importDist('tools/all.js');
-  const { buildServer } = await importDist('server.js');
-  const { LabelGridClient } = await importDist('api/http.js');
-  const { KNOWN_TOOLSETS } = await importDist('config.js');
+  const { allTools } = await importDist('mcp', 'tools/all.js');
+  const { buildServer } = await importDist('mcp', 'server.js');
+  const { LabelGridClient } = await importDist('core', 'index.js');
+  const { KNOWN_TOOLSETS } = await importDist('mcp', 'config.js');
 
   const tools = allTools();
   // Full catalog: every toolset selected explicitly (so default-off toolsets

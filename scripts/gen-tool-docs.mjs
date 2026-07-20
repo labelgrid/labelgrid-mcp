@@ -2,8 +2,9 @@
 /**
  * Generates the README tool-reference table from the compiled tool definitions,
  * so the docs never drift from the code. It reads every tool's name, title,
- * gate, toolset and description from `dist/`, renders one table per toolset, and
- * rewrites the region of README.md between the markers:
+ * gate, toolset and description from `packages/mcp/dist/`, renders one table
+ * per toolset, and rewrites the region of packages/mcp/README.md between the
+ * markers:
  *
  *   <!-- TOOLS:BEGIN -->
  *   ...generated...
@@ -51,15 +52,16 @@ const GATE_LABEL = {
   full_write: 'full-write',
 };
 
+const DIST = '../packages/mcp/dist';
 const DIST_MODULES = [
-  ['../dist/tools/account.js', 'accountTools'],
-  ['../dist/tools/reference.js', 'referenceTools'],
-  ['../dist/tools/catalog.js', 'catalogTools'],
-  ['../dist/tools/releases.js', 'releaseTools'],
-  ['../dist/tools/insights.js', 'insightsTools'],
-  ['../dist/tools/finance.js', 'financeTools'],
-  ['../dist/tools/webhooks.js', 'webhookTools'],
-  ['../dist/tools/distribution.js', 'distributionTools'],
+  [`${DIST}/tools/account.js`, 'accountTools'],
+  [`${DIST}/tools/reference.js`, 'referenceTools'],
+  [`${DIST}/tools/catalog.js`, 'catalogTools'],
+  [`${DIST}/tools/releases.js`, 'releaseTools'],
+  [`${DIST}/tools/insights.js`, 'insightsTools'],
+  [`${DIST}/tools/finance.js`, 'financeTools'],
+  [`${DIST}/tools/webhooks.js`, 'webhookTools'],
+  [`${DIST}/tools/distribution.js`, 'distributionTools'],
 ];
 
 async function loadTools() {
@@ -117,12 +119,12 @@ function render(tools) {
 }
 
 async function main() {
-  const readmePath = resolve('README.md');
+  const readmePath = resolve(new URL('.', import.meta.url).pathname, '../packages/mcp/README.md');
   let readme;
   try {
     readme = readFileSync(readmePath, 'utf8');
   } catch {
-    console.error('gen-tool-docs: README.md not found.');
+    console.error('gen-tool-docs: packages/mcp/README.md not found.');
     process.exit(1);
   }
   const begin = readme.indexOf(BEGIN);
