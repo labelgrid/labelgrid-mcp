@@ -204,6 +204,7 @@ export class LabelGridClient {
   private readonly token: string;
   private readonly fetchFn: typeof fetch;
   private readonly version: string;
+  private readonly userAgent: string;
   private readonly timeoutMs: number;
   private readonly rawTimeoutMs: number;
 
@@ -212,6 +213,8 @@ export class LabelGridClient {
     token: string;
     fetchFn?: typeof fetch;
     version: string;
+    /** Full User-Agent string; defaults to `labelgrid-mcp/<version>`. */
+    userAgent?: string;
     /** API request timeout (default 60s) — a hung call must never hang a tool. */
     timeoutMs?: number;
     /** Timeout for raw transfers like presigned uploads (default 10min). */
@@ -221,6 +224,7 @@ export class LabelGridClient {
     this.token = opts.token;
     this.fetchFn = opts.fetchFn ?? fetch;
     this.version = opts.version;
+    this.userAgent = opts.userAgent ?? `labelgrid-mcp/${opts.version}`;
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.rawTimeoutMs = opts.rawTimeoutMs ?? 600_000;
   }
@@ -229,7 +233,7 @@ export class LabelGridClient {
     return {
       Authorization: `Bearer ${this.token}`,
       Accept: 'application/json',
-      'User-Agent': `labelgrid-mcp/${this.version}`,
+      'User-Agent': this.userAgent,
     };
   }
 
