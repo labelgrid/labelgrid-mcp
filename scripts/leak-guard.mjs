@@ -43,14 +43,15 @@ export const BANNED = [
 
 // Directory/file paths (relative to root, posix-style) never scanned.
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'tmp']);
-const SKIP_FILES = new Set(['test/fixtures/openapi.json']);
+const SKIP_FILES = new Set(['packages/mcp/test/fixtures/openapi.json']);
 // Uncommitted local helpers (gitignored) — e.g. scripts/*.local.mjs — are
 // outside this guard's remit.
 const LOCAL_FILE_RE = /\.local\.[cm]?[jt]s$/;
 
-// Extensions/roots that ARE scanned.
-const SCAN_DIRS = ['src', 'scripts', 'test'];
-const ROOT_FILE_RE = /\.(md|json)$/i; // root-level *.md + server.json
+// Extensions/roots that ARE scanned. `packages` covers every workspace's
+// sources, tests, manifests and docs.
+const SCAN_DIRS = ['packages', 'scripts'];
+const ROOT_FILE_RE = /\.(md|json)$/i; // root-level *.md + *.json manifests
 
 function extractAllowed(line) {
   const allowed = [];

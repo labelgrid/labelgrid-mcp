@@ -1,22 +1,16 @@
 {
-  "name": "@labelgrid/mcp",
-  "version": "0.3.0",
-  "mcpName": "io.github.labelgrid/labelgrid-mcp",
-  "description": "Official LabelGrid MCP server — connect your AI client to your LabelGrid account",
+  "name": "labelgrid-mcp-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "npm workspace for the LabelGrid MCP server and its shared API client",
   "type": "module",
-  "keywords": ["mcp", "model-context-protocol", "labelgrid", "music-distribution", "ai", "claude"],
-  "main": "dist/index.js",
-  "bin": {
-    "labelgrid-mcp": "dist/index.js"
-  },
-  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE", "server.json"],
+  "workspaces": ["packages/core", "packages/mcp"],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build -w @labelgrid/core && npm run build -w @labelgrid/mcp",
     "build:mcpb": "npm run build && node scripts/build-mcpb.mjs",
-    "start": "node dist/index.js",
-    "dev": "tsc --watch",
-    "test": "vitest run --exclude 'test/contract/**'",
-    "test:contract": "vitest run test/contract",
+    "start": "node packages/mcp/dist/index.js",
+    "test": "npm test -w @labelgrid/core && npm test -w @labelgrid/mcp",
+    "test:contract": "npm run test:contract -w @labelgrid/mcp",
     "lint": "biome check .",
     "leak-guard": "node scripts/leak-guard.mjs",
     "check-coverage": "node scripts/check-api-coverage.mjs",
@@ -30,10 +24,6 @@
   "license": "MIT",
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
-    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
