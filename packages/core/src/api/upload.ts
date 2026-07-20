@@ -33,6 +33,13 @@ function isReadableFile(p: string): boolean {
 
 type UploadUrlResponse = { upload_url?: unknown; key?: unknown };
 
+/**
+ * The structural subset of {@link LabelGridClient} the presigned-upload flow
+ * needs. Declared as a Pick so any object with these methods (including a test
+ * stub) can drive the flow — a class type would demand the private fields too.
+ */
+export type UploadHttp = Pick<LabelGridClient, 'post' | 'put' | 'raw'>;
+
 export type UploadOptions = {
   /** The endpoint that mints the presigned URL, e.g. /tracks/42/files/stereo/upload-url. */
   uploadUrlPath: string;
@@ -43,7 +50,7 @@ export type UploadOptions = {
 };
 
 export async function uploadViaPresignedUrl(
-  client: LabelGridClient,
+  client: UploadHttp,
   opts: UploadOptions,
 ): Promise<ApiResult<unknown>> {
   // Fail fast and locally: never touch the network for a file we cannot read.

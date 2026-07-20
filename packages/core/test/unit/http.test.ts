@@ -42,6 +42,19 @@ describe('LabelGridClient headers', () => {
     expect(headerOf(init, 'Accept')).toBe('application/json');
     expect(headerOf(init, 'User-Agent')).toBe(`labelgrid-mcp/${VERSION}`);
   });
+
+  it('honors a caller-supplied userAgent verbatim', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, { ok: true }));
+    const client = new LabelGridClient({
+      baseUrl: BASE,
+      token: 'tok-123',
+      fetchFn: fetchFn as unknown as typeof fetch,
+      version: VERSION,
+      userAgent: `labelgrid-cli/${VERSION}`,
+    });
+    await client.get('/me');
+    expect(headerOf(lastInit(fetchFn), 'User-Agent')).toBe(`labelgrid-cli/${VERSION}`);
+  });
 });
 
 describe('LabelGridClient query serialization', () => {
