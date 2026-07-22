@@ -1,6 +1,6 @@
 # LabelGrid MCP — workspace
 
-[![CI](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40labelgrid%2Fmcp)](https://www.npmjs.com/package/@labelgrid/mcp) [![CI](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml) [![LabelGrid MCP server](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp/badges/score.svg)](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp)
 
 The official [LabelGrid](https://labelgrid.com) tooling for the LabelGrid public API, organised
 as an npm workspace.
