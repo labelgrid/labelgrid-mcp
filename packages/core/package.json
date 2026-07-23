@@ -1,9 +1,13 @@
 {
   "name": "@labelgrid/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared LabelGrid public-API client: HTTP transport, uploads, content types, the catalog-entity registry, and redacting logging",
   "type": "module",
-  "keywords": ["labelgrid", "music-distribution", "api-client"],
+  "keywords": [
+    "labelgrid",
+    "music-distribution",
+    "api-client"
+  ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -12,7 +16,12 @@
       "default": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
