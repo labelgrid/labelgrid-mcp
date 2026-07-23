@@ -45,6 +45,31 @@ function statReadableFile(p: string): { size: number } | null {
 type UploadUrlResponse = { upload_url?: unknown; key?: unknown };
 
 /**
+ * Composes a byte-counting Transform onto `src` for progress reporting and —
+ * critically — forwards a SOURCE error onto the composed body. `pipe()` does NOT
+ * propagate a source-stream error to its destination, so without this a file
+ * that becomes unreadable mid-transfer (deleted, an I/O fault) would emit an
+ * unhandled 'error' on the read stream — crashing the process — instead of
+ * destroying the composed body so `fetch` rejects into the UPLOAD_FAILED catch.
+ */
+export function attachProgressCounter(
+  src: NodeJS.ReadableStream,
+  onProgress: (bytesSoFar: number) => void,
+): NodeJS.ReadableStream {
+  let transferred = 0;
+  const counter = new Transform({
+    transform(chunk: Buffer, _enc, cb): void {
+      transferred += chunk.length;
+      onProgress(transferred);
+      cb(null, chunk);
+    },
+  });
+  src.pipe(counter);
+  src.on('error', (e) => counter.destroy(e instanceof Error ? e : new Error(String(e))));
+  return counter;
+}
+
+/**
  * The structural subset of {@link LabelGridClient} the presigned-upload flow
  * needs. Declared as a Pick so any object with these methods (including a test
  * stub) can drive the flow — a class type would demand the private fields too.
@@ -138,17 +163,10 @@ export async function putToPresignedUrl(
     let body: NodeJS.ReadableStream = createReadStream(filePath);
     if (onProgress !== undefined) {
       // Count bytes as they pass through, inside the Transform (never a 'data'
-      // listener, which would flip the stream to flowing mode and race the reader).
-      let transferred = 0;
-      const counter = new Transform({
-        transform(chunk: Buffer, _enc, cb): void {
-          transferred += chunk.length;
-          onProgress(transferred);
-          cb(null, chunk);
-        },
-      });
-      (body as NodeJS.ReadableStream).pipe(counter);
-      body = counter;
+      // listener, which would flip the stream to flowing mode and race the
+      // reader). attachProgressCounter also forwards a source-stream error so a
+      // mid-transfer read failure becomes a clean UPLOAD_FAILED, not a crash.
+      body = attachProgressCounter(body, onProgress);
     }
     const putInit = {
       method: 'PUT',

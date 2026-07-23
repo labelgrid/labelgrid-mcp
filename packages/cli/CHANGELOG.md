@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flat memory use. The `wx`-exclusive / `--force` overwrite discipline is
   unchanged.
 
+### Fixed
+
+- `download` now writes to a temp sibling and moves it into place atomically
+  only after the transfer succeeds. A failed or interrupted download no longer
+  leaves a partial file at `--out`, and `--force` no longer truncates an
+  existing good file before the new download completes — the original is kept
+  untouched if the transfer fails.
+
 ## [0.1.1] - 2026-07-20
 
 ### Changed

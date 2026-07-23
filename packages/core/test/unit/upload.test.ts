@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { assertAllowedExtension } from '../../src/api/content-types.js';
 import { LabelGridClient } from '../../src/api/http.js';
 import {
+  attachProgressCounter,
   commitUpload,
   mintUpload,
   putToPresignedUrl,
@@ -427,6 +429,55 @@ describe('presigned upload seam (mint / put / commit)', () => {
     expect(seen[seen.length - 1]).toBe(payload.length);
     for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
     rmSync(big, { force: true });
+  });
+
+  it('attachProgressCounter forwards a source error to the composed body (no unhandled error)', async () => {
+    // A read stream that errors mid-flight (after the first chunk) must destroy
+    // the composed body — pipe() alone would leave the source error unhandled.
+    // We track unhandled process events to prove none escape.
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown): void => {
+      unhandled.push(e);
+    };
+    process.on('uncaughtException', onUnhandled);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const src = new Readable({ read() {} });
+      const seen: number[] = [];
+      const composed = attachProgressCounter(src, (n) => seen.push(n));
+      const errP = new Promise<Error>((resolve) =>
+        composed.on('error', (e) => resolve(e as Error)),
+      );
+      composed.on('data', () => {}); // resume the flow so chunks are counted
+      src.push(Buffer.from([1, 2, 3]));
+      await new Promise((r) => setImmediate(r));
+      src.destroy(new Error('disk vanished'));
+      const err = await errP;
+      expect(err.message).toBe('disk vanished');
+      expect(seen[seen.length - 1]).toBe(3);
+      await new Promise((r) => setImmediate(r));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('uncaughtException', onUnhandled);
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('the composed progress body rejects a fetch consumer on a mid-transfer source error', async () => {
+    // A fetch that consumes the request body the way undici does: reading the
+    // composed body must reject (so putToPresignedUrl's PUT rejects into its
+    // UPLOAD_FAILED catch) rather than leave the source error unhandled.
+    const src = new Readable({ read() {} });
+    src.push(Buffer.from([0xaa, 0xbb]));
+    const composed = attachProgressCounter(src, () => {});
+    setImmediate(() => src.destroy(new Error('read fault mid-transfer')));
+
+    const consume = new Promise<void>((resolve, reject) => {
+      composed.on('data', () => {});
+      composed.on('error', reject);
+      composed.on('end', resolve);
+    });
+    await expect(consume).rejects.toThrow('read fault mid-transfer');
   });
 
   it('mintUpload surfaces an UPLOAD_URL_INVALID when the response lacks a usable url/key', async () => {

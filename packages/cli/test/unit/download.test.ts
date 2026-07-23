@@ -1,6 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TEST_TOKEN, makeStubClient, run } from '../helpers.js';
 
@@ -9,6 +17,11 @@ beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'lg-cli-download-'));
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+/** The canonical (realpath-resolved parent) form of a path, as reported. */
+function canonical(p: string): string {
+  return join(realpathSync(dirname(p)), basename(p));
+}
 
 function trackStub(bytes = 'audio-bytes') {
   return makeStubClient({
@@ -35,7 +48,8 @@ describe('download --track', () => {
     const rawInit = r.calls[1].args[1] as RequestInit;
     expect(rawInit.headers).toBeUndefined();
     expect(readFileSync(out, 'utf8')).toBe('audio-bytes');
-    expect(r.stdout).toContain(out);
+    // saved_to is reported as the realpath-resolved canonical path (F3).
+    expect(r.stdout).toContain(canonical(out));
   });
 
   it('streams a large binary body to disk byte-identically (no full buffering)', async () => {
@@ -86,6 +100,54 @@ describe('download --track', () => {
     );
     expect(r.code).toBe(0);
     expect(readFileSync(out, 'utf8')).toBe('new-bytes');
+  });
+
+  function failingBodyStub() {
+    return makeStubClient({
+      resultFor: (method, path) =>
+        method === 'get' && path.endsWith('/download-url')
+          ? { data: { download_url: 'https://cdn.example.test/signed-file' } }
+          : undefined,
+      rawResponse: () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([1, 2, 3]));
+              controller.error(new Error('connection reset mid-stream'));
+            },
+          }),
+          { status: 200 },
+        ),
+    });
+  }
+
+  it('a mid-stream failure leaves NO file and NO temp sibling at --out', async () => {
+    const failDir = mkdtempSync(join(dir, 'midfail-'));
+    const out = join(failDir, 'broken.wav');
+    const r = await run(['download', '--track', '4', '--type', 'audio_24', '--out', out], {
+      stub: failingBodyStub(),
+    });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('WRITE_FAILED');
+    expect(existsSync(out)).toBe(false);
+    // No `.partial-*` temp sibling remains.
+    expect(readdirSync(failDir)).toEqual([]);
+  });
+
+  it('--force keeps the ORIGINAL file intact when the transfer fails mid-stream', async () => {
+    const failDir = mkdtempSync(join(dir, 'forcefail-'));
+    const out = join(failDir, 'keepme.wav');
+    writeFileSync(out, 'original-good-bytes');
+    const r = await run(
+      ['download', '--track', '4', '--type', 'audio_24', '--out', out, '--force'],
+      { stub: failingBodyStub() },
+    );
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('WRITE_FAILED');
+    // The pre-existing good file is untouched (temp+atomic-rename never truncated it).
+    expect(readFileSync(out, 'utf8')).toBe('original-good-bytes');
+    // Only the original file remains — no temp sibling.
+    expect(readdirSync(failDir)).toEqual(['keepme.wav']);
   });
 
   it('a relative --out is rejected before any call (exit 1, INVALID_PATH)', async () => {
