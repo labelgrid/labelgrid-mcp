@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent-substrate/common.defs.json",
+  "title": "Shared $defs for portfolio.schema.json and project.schema.json",
+  "description": "Single vocabulary for facts that appear in both the central portfolio registry and per-repo project.yml manifests (contracts/project-config.md). Edit here, never fork.",
+  "$defs": {
+    "canonical_status": {
+      "enum": [
+        "todo",
+        "needs-planning",
+        "ready",
+        "in-progress",
+        "pr-open",
+        "in-review",
+        "done",
+        "canceled",
+        "on-hold"
+      ],
+      "description": "canonical work-item states (contracts/tracker-adapter.md)"
+    },
+    "tracker": {
+      "type": "object",
+      "required": ["adapter"],
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "enum": ["jira", "github", "linear", "none"]
+        },
+        "project_key": {
+          "type": "string",
+          "description": "Jira project key or owner/repo for GitHub issues"
+        },
+        "status_map": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/canonical_status"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "canonical state -> tracker representation (contracts/tracker-adapter.md)"
+        }
+      }
+    },
+    "git_host": {
+      "type": "object",
+      "required": ["provider"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": ["bitbucket", "github", "none"]
+        },
+        "slug": {
+          "type": "string",
+          "description": "workspace/repo or owner/repo"
+        },
+        "default_branch": {
+          "type": "string",
+          "description": "trunk branch name (project.yml surface; optional centrally)"
+        }
+      }
+    },
+    "ci_provider": {
+      "enum": ["buildkite", "bitbucket-pipelines", "github-actions", "none", "unknown"]
+    },
+    "errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": ["bugsnag", "sentry", "nightwatch", "none", "unknown"]
+        },
+        "project": {
+          "type": "string"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": ["coderabbit", "greptile", "none", "unknown"]
+        },
+        "config_verified": {
+          "type": "boolean",
+          "description": "actual repo review-bot config checked (lgapi lesson: CHILL profile voids assumptions)"
+        }
+      }
+    },
+    "deploy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": {
+          "enum": [
+            "forge",
+            "envoyer",
+            "vercel",
+            "cloudflare-pages",
+            "vps-docker",
+            "appwrite",
+            "packagist",
+            "npm",
+            "desktop",
+            "none"
+          ]
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true,
+          "description": "LITERAL ssh aliases from ~/.ssh/config (ssh-and-servers doctrine) — never shorthand"
+        },
+        "method": {
+          "enum": [
+            "webhook-cd",
+            "push-to-deploy",
+            "pipeline",
+            "scp",
+            "manual",
+            "registry-publish",
+            "none"
+          ]
+        },
+        "warning": {
+          "type": "string",
+          "description": "one-line hazard note surfaced by tooling before deploy-adjacent actions (e.g. 'merge to main = prod deploy')"
+        }
+      }
+    },
+    "local_dev": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runner"],
+      "properties": {
+        "runner": {
+          "enum": ["herd", "docker", "native", "none"],
+          "description": "what herd-qa/preview skills may assume for local QA"
+        }
+      }
+    },
+    "loop_kind": {
+      "enum": ["watch", "fix", "groom", "reconcile", "review", "debt-ratchet", "source", "roadmap", "meta"]
+    },
+    "loops": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/loop_kind"
+      },
+      "uniqueItems": true,
+      "description": "enabled loop kinds (contracts/loop-kit.md); [] = census-only"
+    },
+    "model": {
+      "enum": ["claude-fable-5", "claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"]
+    },
+    "effort": {
+      "enum": ["low", "medium", "high", "xhigh", "max"]
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy_calibration": {
+          "type": "string",
+          "description": "llm-autonomy-policy policy_repo() case / weights suffix; REQUIRED before any write-capable loop runs (contracts/autonomy-policy.md)"
+        },
+        "tier": {
+          "enum": ["soak", "standard", "trusted"]
+        },
+        "model": {
+          "$ref": "#/$defs/model",
+          "description": "default model for this project's loops (bin/scaffold-loop --model, threaded to run.sh.tmpl -> mon_run_claude); loop_models overrides per kind"
+        },
+        "effort": {
+          "$ref": "#/$defs/effort",
+          "description": "default reasoning effort for this project's loops"
+        },
+        "loop_models": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/model"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/loop_kind"
+          },
+          "description": "per-loop-kind model override; falls back to autonomy.model then bin/scaffold-loop's default"
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "description": "ONLY the providers agent loops/jobs need for this project — least privilege (contracts/credentials.md)",
+      "additionalProperties": false,
+      "propertyNames": {
+        "enum": [
+          "bugsnag",
+          "sentry",
+          "nightwatch",
+          "atlassian",
+          "linear",
+          "bitbucket",
+          "github",
+          "forge",
+          "envoyer",
+          "aws",
+          "cloudflare",
+          "r2",
+          "hetzner",
+          "e2b",
+          "anthropic",
+          "openai",
+          "stripe",
+          "slack",
+          "buildkite",
+          "doppler",
+          "convex",
+          "first-party-api"
+        ]
+      },
+      "patternProperties": {
+        "^[a-z][a-z0-9-]*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["env", "store"],
+          "properties": {
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]*$"
+              },
+              "uniqueItems": true,
+              "description": "EXACT env-var NAMES this project's loops read for the service (never values); [] valid for CLI-keyring stores"
+            },
+            "store": {
+              "enum": ["secrets-file", "doppler", "gh-cli", "keychain", "host-env"]
+            },
+            "doppler": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "project": {
+                  "type": "string"
+                },
+                "config": {
+                  "type": "string"
+                }
+              }
+            },
+            "shared": {
+              "enum": ["fleet"],
+              "description": "token is fleet-wide by design (e.g. ANTHROPIC_API_KEY)"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "products": {
+      "type": "object",
+      "description": "products within this repository — monorepos retain product labels and subpaths without pretending they are separate checkouts",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9-]*$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["label", "subpath"],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1
+            },
+            "subpath": {
+              "type": "string",
+              "description": "path within the repository; '.' = repo root"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
