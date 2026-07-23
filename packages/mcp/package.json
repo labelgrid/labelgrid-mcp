@@ -4,25 +4,12 @@
   "mcpName": "io.github.labelgrid/labelgrid-mcp",
   "description": "Official LabelGrid MCP server \u2014 connect your AI client to your LabelGrid account",
   "type": "module",
-  "keywords": [
-    "mcp",
-    "model-context-protocol",
-    "labelgrid",
-    "music-distribution",
-    "ai",
-    "claude"
-  ],
+  "keywords": ["mcp", "model-context-protocol", "labelgrid", "music-distribution", "ai", "claude"],
   "main": "dist/index.js",
   "bin": {
     "labelgrid-mcp": "dist/index.js"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
-    "server.json"
-  ],
+  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE", "server.json"],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
