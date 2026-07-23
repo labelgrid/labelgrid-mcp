@@ -298,6 +298,37 @@ describe('LabelGridClient.postMultipart', () => {
     const file = form.get('file') as File;
     expect(file.type).toBe('image/jpeg');
   });
+
+  it('arms the raw transfer timeout (not the short JSON timeout) on the multipart path', async () => {
+    // A large multipart upload on a slow uplink must not abort at the 60s JSON
+    // deadline: a raw-body request uses rawTimeoutMs. With a tiny timeoutMs but a
+    // generous rawTimeoutMs, a fetch that takes ~40ms times out for a JSON GET
+    // but completes for a multipart POST.
+    const tiff = join(dir, 'art.tiff');
+    writeFileSync(tiff, Buffer.from([0x49, 0x49, 0x2a, 0x00]));
+    const slowFetch = ((_url: unknown, init?: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        const t = setTimeout(() => resolve(jsonResponse(200, { ok: true })), 40);
+        init?.signal?.addEventListener('abort', () => {
+          clearTimeout(t);
+          reject(init.signal?.reason);
+        });
+      })) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: BASE,
+      token: 'tok',
+      fetchFn: slowFetch,
+      version: VERSION,
+      timeoutMs: 5,
+      rawTimeoutMs: 10_000,
+    });
+    // The JSON path uses the 5ms timeout and aborts.
+    const jsonResult = await client.get('/me');
+    expect('error' in jsonResult && jsonResult.error.code).toBe('TIMEOUT');
+    // The multipart path uses the 10s raw timeout and completes.
+    const uploadResult = await client.postMultipart('/x', tiff, 'file');
+    expect('data' in uploadResult).toBe(true);
+  });
 });
 
 describe('LabelGridClient response-size bounds', () => {

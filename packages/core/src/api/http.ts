@@ -249,7 +249,11 @@ export class LabelGridClient {
       // across separate tool calls); otherwise a fresh UUID is generated.
       headers['Idempotency-Key'] = opts.idempotencyKey ?? randomUUID();
     }
-    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(this.timeoutMs) };
+    // A raw body is a byte transfer (a multipart upload), not a JSON call — it
+    // gets the longer transfer timeout so a large file on a slow uplink is not
+    // aborted at the 60s JSON deadline.
+    const effectiveTimeoutMs = opts.rawBody !== undefined ? this.rawTimeoutMs : this.timeoutMs;
+    const init: RequestInit = { method, headers, signal: AbortSignal.timeout(effectiveTimeoutMs) };
     if (opts.rawBody !== undefined) {
       init.body = opts.rawBody;
     } else if (opts.body !== undefined) {
@@ -268,7 +272,7 @@ export class LabelGridClient {
         return {
           error: {
             code: 'TIMEOUT',
-            message: `The request timed out after ${Math.round(this.timeoutMs / 1000)} seconds. Try again, or narrow the request.`,
+            message: `The request timed out after ${Math.round(effectiveTimeoutMs / 1000)} seconds. Try again, or narrow the request.`,
             status: 0,
           },
         };
@@ -318,7 +322,7 @@ export class LabelGridClient {
         return {
           error: {
             code: 'TIMEOUT',
-            message: `The request timed out after ${Math.round(this.timeoutMs / 1000)} seconds while reading the response. Try again, or narrow the request.`,
+            message: `The request timed out after ${Math.round(effectiveTimeoutMs / 1000)} seconds while reading the response. Try again, or narrow the request.`,
             status: 0,
           },
         };
