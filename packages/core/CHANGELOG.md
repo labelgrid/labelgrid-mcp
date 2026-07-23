@@ -15,6 +15,11 @@ server and CLI — there are no API-stability promises before 1.0.
 - `MAX_UPLOAD_BYTES` (4 GiB) upload ceiling and a `FILE_TOO_LARGE` structured
   error. An oversized file is now rejected with an honest size-and-limit
   message instead of being mislabeled `FILE_NOT_FOUND`.
+- `LabelGridClient.getRaw(path, query?)` — an authenticated raw GET for file
+  downloads that returns the live response for streaming, or the same
+  normalized structured error as the JSON path, honoring the raw transfer
+  timeout. Consolidates the duplicated authed-download helpers that lived in the
+  MCP and CLI packages.
 
 ### Changed
 

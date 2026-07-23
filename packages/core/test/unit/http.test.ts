@@ -429,6 +429,56 @@ describe('LabelGridClient response-size bounds', () => {
   });
 });
 
+describe('LabelGridClient.getRaw', () => {
+  it('returns the live Response on success and sends the auth headers', async () => {
+    const fetchFn = vi.fn(async () => new Response('a,b\n1,2', { status: 200 }));
+    const r = await makeClient(fetchFn as unknown as typeof fetch).getRaw('/statements/INV-1/csv');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(await r.res.text()).toBe('a,b\n1,2');
+    const init = lastInit(fetchFn);
+    expect(headerOf(init, 'Authorization')).toBe('Bearer tok-123');
+    expect(headerOf(init, 'User-Agent')).toBe(`labelgrid-mcp/${VERSION}`);
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/statements/INV-1/csv`);
+  });
+
+  it('serializes a query object via buildQuery', async () => {
+    const fetchFn = vi.fn(async () => new Response('ok', { status: 200 }));
+    await makeClient(fetchFn as unknown as typeof fetch).getRaw('/statements/export/csv', {
+      start_date: '2026-01-01',
+      end_date: undefined,
+    });
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/statements/export/csv?start_date=2026-01-01`);
+  });
+
+  it('normalizes a non-2xx into the same structured error as the JSON path', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(404, { message: 'gone' }));
+    const r = await makeClient(fetchFn as unknown as typeof fetch).getRaw('/statements/X/invoice');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe('NOT_FOUND');
+      expect(r.error.message).toBe('gone');
+      expect(r.error.status).toBe(404);
+    }
+  });
+
+  it('maps a timed-out download to a structured TIMEOUT error', async () => {
+    const hangingFetch = ((_url: unknown, init?: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      })) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: BASE,
+      token: 'tok',
+      fetchFn: hangingFetch,
+      version: VERSION,
+      rawTimeoutMs: 20,
+    });
+    const r = await client.getRaw('/statements/X/invoice');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe('TIMEOUT');
+  });
+});
+
 describe('request timeouts', () => {
   it('maps a timed-out API request to a structured TIMEOUT error', async () => {
     // A stub that honors the abort signal like real fetch: rejects on abort.

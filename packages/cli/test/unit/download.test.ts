@@ -125,10 +125,10 @@ describe('download --statement', () => {
     });
     expect(r.code).toBe(0);
     expect(r.calls).toHaveLength(1);
-    expect(r.calls[0].method).toBe('raw');
+    // The authed raw GET now goes through the core client's getRaw (which injects
+    // the auth headers), so the CLI passes only the path.
+    expect(r.calls[0].method).toBe('getRaw');
     expect(String(r.calls[0].args[0])).toContain('/statements/INV-42/csv');
-    const rawInit = r.calls[0].args[1] as RequestInit;
-    expect((rawInit.headers as Record<string, string>).Authorization).toBe(`Bearer ${TEST_TOKEN}`);
     expect(readFileSync(out, 'utf8')).toBe('a,b\n1,2');
     // The token flows into the request header but never into the output.
     expect(r.stdout).not.toContain(TEST_TOKEN);

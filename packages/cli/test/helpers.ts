@@ -55,6 +55,29 @@ export function makeStubClient(cfg: StubCfg = {}): { client: CliClient; calls: C
       fieldName: string,
       extra?: Record<string, string>,
     ) => record('postMultipart', [path, filePath, fieldName, extra]),
+    getRaw: async (path: string, query?: Record<string, unknown>) => {
+      calls.push({ method: 'getRaw', args: [path, query] });
+      const res = cfg.rawResponse?.(path) ?? new Response(null, { status: 200 });
+      if (res.ok) return { ok: true as const, res };
+      let message = `Request failed with status ${res.status}.`;
+      try {
+        const body = JSON.parse(await res.text()) as Record<string, unknown>;
+        if (typeof body.message === 'string') message = body.message;
+      } catch {
+        // keep default
+      }
+      const code =
+        res.status === 401
+          ? 'TOKEN_INVALID'
+          : res.status === 403
+            ? 'FORBIDDEN'
+            : res.status === 404
+              ? 'NOT_FOUND'
+              : res.status >= 500
+                ? 'SERVER_ERROR'
+                : 'ERROR';
+      return { ok: false as const, error: { code, message, status: res.status } };
+    },
     raw: async (url: string, init: RequestInit) => {
       calls.push({ method: 'raw', args: [url, init] });
       // Real fetch consumes the request body; drain a stream body to completion

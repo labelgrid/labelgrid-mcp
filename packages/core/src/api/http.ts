@@ -30,6 +30,12 @@ export type ApiError = {
 
 export type ApiResult<T = unknown> = { data: T } | { error: ApiError };
 
+/**
+ * The outcome of a raw authenticated GET: either the live {@link Response} (for
+ * the caller to stream a file body from) or a normalized structured error.
+ */
+export type RawResult = { ok: true; res: Response } | { ok: false; error: ApiError };
+
 type RequestOpts = {
   query?: Record<string, unknown>;
   body?: unknown;
@@ -489,5 +495,60 @@ export class LabelGridClient {
    */
   raw(url: string, init: RequestInit): Promise<Response> {
     return this.fetchFn(url, { signal: AbortSignal.timeout(this.rawTimeoutMs), ...init });
+  }
+
+  /**
+   * Authenticated raw GET for file-body downloads (statement CSV/PDF): sends the
+   * same auth headers as the JSON path but returns the live {@link Response} on
+   * success so the caller streams the body to disk, never buffering a large file
+   * in memory. A non-2xx is read and normalized to the same structured
+   * {@link ApiError} as the JSON path; a network/timeout failure maps to the same
+   * NETWORK_ERROR/TIMEOUT. Uses the longer raw transfer timeout, since a download
+   * is a byte transfer, not a JSON call.
+   */
+  async getRaw(path: string, query?: Record<string, unknown>): Promise<RawResult> {
+    const url = `${this.baseUrl}${path}${buildQuery(query)}`;
+    let res: Response;
+    try {
+      res = await this.fetchFn(url, {
+        method: 'GET',
+        headers: this.authHeaders(),
+        signal: AbortSignal.timeout(this.rawTimeoutMs),
+      });
+    } catch (err) {
+      return { ok: false, error: this.mapFetchError(err) };
+    }
+    if (res.ok) return { ok: true, res };
+    // Read and normalize the error body exactly as the JSON path does.
+    let body: unknown = null;
+    try {
+      const text = await res.text();
+      if (text.length > 0) {
+        try {
+          body = JSON.parse(text);
+        } catch {
+          body = text;
+        }
+      }
+    } catch {
+      // no readable error body — normalizeError falls back to status defaults
+    }
+    return { ok: false, error: normalizeError(res, body) };
+  }
+
+  /** Maps a fetch rejection (abort/timeout vs other) to a structured error. */
+  private mapFetchError(err: unknown): ApiError {
+    if (err instanceof DOMException && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      return {
+        code: 'TIMEOUT',
+        message: `The request timed out after ${Math.round(this.rawTimeoutMs / 1000)} seconds. Try again, or narrow the request.`,
+        status: 0,
+      };
+    }
+    return {
+      code: 'NETWORK_ERROR',
+      message: err instanceof Error ? err.message : 'Network request failed.',
+      status: 0,
+    };
   }
 }
