@@ -14,7 +14,14 @@ import type { CommandContext, GlobalOpts, Resolved } from '../context.js';
 import { buildContext } from '../context.js';
 import { streamDownload, validateOutPath } from '../downloads.js';
 import { printData } from '../output.js';
+import { makeProgress } from '../progress.js';
 import { failWith, runApi } from '../run.js';
+
+/** Reads a numeric Content-Length off a response, or undefined when absent. */
+function contentLength(res: Response): number | undefined {
+  const n = Number.parseInt(res.headers.get('Content-Length') ?? '', 10);
+  return Number.isNaN(n) ? undefined : n;
+}
 
 /** CLI track asset names → the API asset path segment. */
 const TRACK_ASSETS: Record<string, string> = {
@@ -70,7 +77,9 @@ async function downloadTrackAsset(
       status: res.status,
     });
   }
-  const written = await streamDownload(outPath, res.body, force);
+  const progress = makeProgress(ctx.out, contentLength(res));
+  const written = await streamDownload(outPath, res.body, force, progress.onProgress);
+  progress.done();
   if ('error' in written) failWith(ctx, written.error);
   printData(ctx.out, { saved_to: outPath, bytes: written.bytes });
 }
@@ -88,7 +97,9 @@ async function downloadStatementFile(
       : `/statements/${encodeURIComponent(invoice)}/invoice`;
   const result = await ctx.client.getRaw(path);
   if (!result.ok) failWith(ctx, result.error);
-  const written = await streamDownload(outPath, result.res.body, force);
+  const progress = makeProgress(ctx.out, contentLength(result.res));
+  const written = await streamDownload(outPath, result.res.body, force, progress.onProgress);
+  progress.done();
   if ('error' in written) failWith(ctx, written.error);
   printData(ctx.out, { saved_to: outPath, bytes: written.bytes });
 }

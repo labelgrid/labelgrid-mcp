@@ -24,6 +24,7 @@
 
 import { createReadStream, statSync } from 'node:fs';
 import { basename } from 'node:path';
+import { Transform } from 'node:stream';
 import { log } from '../log.js';
 import { contentType } from './content-types.js';
 import type { ApiError, ApiResult, LabelGridClient } from './http.js';
@@ -59,6 +60,8 @@ export type UploadOptions = {
   filePath: string;
   /** Byte ceiling override (defaults to {@link MAX_UPLOAD_BYTES}); for tests. */
   maxBytes?: number;
+  /** Called with the running byte count as the upload streams (for a progress UI). */
+  onProgress?: (bytesSoFar: number) => void;
 };
 
 function fileTooLargeError(size: number, limit: number): ApiError {
@@ -115,6 +118,7 @@ export async function putToPresignedUrl(
   uploadUrl: string,
   filePath: string,
   maxBytes: number = MAX_UPLOAD_BYTES,
+  onProgress?: (bytesSoFar: number) => void,
 ): Promise<ApiError | null> {
   // The file may vanish between an earlier stat and this transfer (a TOCTOU
   // race); a structured FILE_NOT_FOUND is the contract, not a throw.
@@ -131,13 +135,28 @@ export async function putToPresignedUrl(
   try {
     // A stream body must declare Content-Length (a chunked PUT is rejected 411 by
     // S3-compatible storage) and requires duplex: 'half' for undici's fetch.
+    let body: NodeJS.ReadableStream = createReadStream(filePath);
+    if (onProgress !== undefined) {
+      // Count bytes as they pass through, inside the Transform (never a 'data'
+      // listener, which would flip the stream to flowing mode and race the reader).
+      let transferred = 0;
+      const counter = new Transform({
+        transform(chunk: Buffer, _enc, cb): void {
+          transferred += chunk.length;
+          onProgress(transferred);
+          cb(null, chunk);
+        },
+      });
+      (body as NodeJS.ReadableStream).pipe(counter);
+      body = counter;
+    }
     const putInit = {
       method: 'PUT',
       headers: {
         'Content-Type': contentType(filePath),
         'Content-Length': String(stat.size),
       },
-      body: createReadStream(filePath),
+      body,
       duplex: 'half',
     } as unknown as RequestInit;
     putRes = await client.raw(uploadUrl, putInit);
@@ -195,7 +214,13 @@ export async function uploadViaPresignedUrl(
   // the commit, so a half-uploaded object is never finalized.
   const minted = await mintUpload(client, opts.uploadUrlPath, basename(opts.filePath));
   if ('error' in minted) return { error: minted.error };
-  const putError = await putToPresignedUrl(client, minted.uploadUrl, opts.filePath, limit);
+  const putError = await putToPresignedUrl(
+    client,
+    minted.uploadUrl,
+    opts.filePath,
+    limit,
+    opts.onProgress,
+  );
   if (putError !== null) return { error: putError };
   return commitUpload(client, opts.commitPath, minted.key);
 }
