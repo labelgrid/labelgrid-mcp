@@ -3,21 +3,12 @@
   "version": "0.2.0",
   "description": "Official LabelGrid CLI \u2014 manage your catalog, releases, distribution and royalties from the terminal",
   "type": "module",
-  "keywords": [
-    "labelgrid",
-    "music-distribution",
-    "cli"
-  ],
+  "keywords": ["labelgrid", "music-distribution", "cli"],
   "main": "dist/program.js",
   "bin": {
     "labelgrid": "dist/index.js"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
