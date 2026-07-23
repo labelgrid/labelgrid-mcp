@@ -10,7 +10,7 @@
  */
 
 import { createWriteStream, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute } from 'node:path';
+import { dirname, isAbsolute, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ApiError, ApiResult } from '@labelgrid/core';
@@ -73,13 +73,23 @@ async function readBoundedText(res: Response, max: number): Promise<string | Api
   return new TextDecoder('utf-8').decode(merged);
 }
 
+/** True when `child` is `root` itself or nested beneath it (after realpath). */
+function isWithin(root: string, child: string): boolean {
+  const rel = relative(root, child);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
 /**
  * Validates that save_to_path is absolute and its parent resolves (via
  * realpathSync, so a dangling/symlinked parent is rejected) to an existing real
- * directory. Writing itself is exclusive (see writeNewFile), so this never
- * overwrites an existing file.
+ * directory, AND — when an `allowedRoot` is given — that the resolved parent is
+ * inside that allow-list root, so a tool can only write under a sanctioned
+ * directory even if an injected path points elsewhere. The parent is resolved
+ * to its real target BEFORE the prefix check (the file itself does not exist
+ * yet), so a symlinked parent cannot escape the root. Writing itself is
+ * exclusive (see writeNewFile), so this never overwrites an existing file.
  */
-function validateSavePath(p: string): ApiError | null {
+function validateSavePath(p: string, allowedRoot: string | undefined): ApiError | null {
   if (!isAbsolute(p)) {
     return {
       code: 'INVALID_PATH',
@@ -108,6 +118,13 @@ function validateSavePath(p: string): ApiError | null {
     return {
       code: 'INVALID_PATH',
       message: `The parent directory of save_to_path is not a directory: ${dir}.`,
+      status: 0,
+    };
+  }
+  if (allowedRoot !== undefined && !isWithin(allowedRoot, realDir)) {
+    return {
+      code: 'DOWNLOAD_DIR_NOT_ALLOWED',
+      message: `save_to_path must be inside the allowed download directory (${allowedRoot}). Set LABELGRID_DOWNLOAD_DIR to change it.`,
       status: 0,
     };
   }
@@ -279,7 +296,7 @@ const downloadStatement: ToolDef = {
       ),
   },
   annotations: { readOnlyHint: true },
-  handler: async (args, { client }): Promise<ApiResult<unknown>> => {
+  handler: async (args, { client, config }): Promise<ApiResult<unknown>> => {
     const invoice = args.invoice_number as string | undefined;
     const savePath = args.save_to_path as string | undefined;
 
@@ -304,7 +321,7 @@ const downloadStatement: ToolDef = {
           },
         };
       }
-      const err = validateSavePath(savePath);
+      const err = validateSavePath(savePath, config.downloadDir);
       if (err) return { error: err };
       const result = await client.getRaw(`/statements/${encodeURIComponent(invoice)}/invoice`);
       if (!result.ok) return { error: result.error };
@@ -315,7 +332,7 @@ const downloadStatement: ToolDef = {
 
     // format === 'csv'
     if (savePath !== undefined) {
-      const err = validateSavePath(savePath);
+      const err = validateSavePath(savePath, config.downloadDir);
       if (err) return { error: err };
     }
     let path: string;

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LABELGRID_TIMEOUT_MS` and `LABELGRID_TRANSFER_TIMEOUT_MS` configure the JSON
   request timeout and the upload/download transfer timeout. A non-positive-
   integer value is ignored with a warning and the built-in default applies.
+- `LABELGRID_DOWNLOAD_DIR` — the only directory `download_statement` may write a
+  `save_to_path` into (default: `~/Downloads` if present, else the working
+  directory). A path resolving outside it is refused with a structured error.
 
 ### Changed
 

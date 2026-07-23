@@ -8,6 +8,9 @@
  * A read-only override wins over everything.
  */
 
+import { realpathSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { log, parseTimeoutMs } from '@labelgrid/core';
 
 export type Config = {
@@ -23,7 +26,40 @@ export type Config = {
   timeoutMs?: number;
   /** Raw transfer (upload/download) timeout override (ms); undefined = default. */
   rawTimeoutMs?: number;
+  /**
+   * The only directory a file-writing tool (download_statement) may write into,
+   * resolved to a real path. From LABELGRID_DOWNLOAD_DIR, else ~/Downloads if it
+   * exists, else the process cwd.
+   */
+  downloadDir?: string;
 };
+
+/**
+ * Resolves the download allow-list root: LABELGRID_DOWNLOAD_DIR if set, else the
+ * user's ~/Downloads when it exists, else the process cwd. Resolved to a real
+ * path so a symlinked root is compared canonically.
+ */
+function resolveDownloadDir(env: NodeJS.ProcessEnv): string {
+  const explicit = env.LABELGRID_DOWNLOAD_DIR?.trim();
+  let candidate: string;
+  if (explicit !== undefined && explicit.length > 0) {
+    candidate = explicit;
+  } else {
+    const downloads = join(homedir(), 'Downloads');
+    let hasDownloads = false;
+    try {
+      hasDownloads = statSync(downloads).isDirectory();
+    } catch {
+      hasDownloads = false;
+    }
+    candidate = hasDownloads ? downloads : process.cwd();
+  }
+  try {
+    return realpathSync(candidate);
+  } catch {
+    return candidate;
+  }
+}
 
 /**
  * Parses a timeout env var into a positive-integer ms, warning once (and
@@ -97,6 +133,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     env.LABELGRID_TRANSFER_TIMEOUT_MS,
     'LABELGRID_TRANSFER_TIMEOUT_MS',
   );
+  const downloadDir = resolveDownloadDir(env);
 
   const token = env.LABELGRID_API_TOKEN?.trim();
   if (!token) {
@@ -112,6 +149,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       toolsets: null,
       timeoutMs,
       rawTimeoutMs,
+      downloadDir,
     };
   }
 
@@ -172,5 +210,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     toolsets,
     timeoutMs,
     rawTimeoutMs,
+    downloadDir,
   };
 }

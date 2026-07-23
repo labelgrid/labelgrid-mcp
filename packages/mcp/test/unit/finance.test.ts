@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type ApiResult, LabelGridClient } from '@labelgrid/core';
@@ -10,7 +10,7 @@ import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
 type Responder = (url: string, init: RequestInit) => Promise<Response>;
 
-function harness(responder?: Responder) {
+function harness(responder?: Responder, downloadDir: string = realpathSync(tmpdir())) {
   const fetchFn = vi.fn(
     responder ?? (async () => new Response(JSON.stringify({ ok: true }), { status: 200 })),
   );
@@ -27,6 +27,9 @@ function harness(responder?: Responder) {
     writes: true,
     fullWrites: true,
     toolsets: null,
+    // Default the download allow-list root to the OS temp dir so the save-path
+    // tests (which write under mkdtemp(tmpdir())) are inside it.
+    downloadDir,
   };
   return { fetchFn, ctx: { client, config } as ToolContext };
 }
@@ -391,6 +394,56 @@ describe('download_statement format=invoice_pdf', () => {
     expect(readFileSync(savePath).equals(big)).toBe(true);
     const d = data(r) as { saved_to: string; bytes: number };
     expect(d.bytes).toBe(big.length);
+  });
+
+  it('allows a save_to_path inside the download directory', async () => {
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    const inside = mkdtempSync(join(dir, 'inside-'));
+    const { ctx } = harness(async () => new Response(pdfBytes, { status: 200 }), realpathSync(dir));
+    const r = await byName('download_statement').handler(
+      { format: 'invoice_pdf', invoice_number: 'INV-1', save_to_path: join(inside, 'ok.pdf') },
+      ctx,
+    );
+    expect(isErr(r)).toBe(false);
+  });
+
+  it('refuses a save_to_path outside the download directory (naming the env var)', async () => {
+    const allowed = mkdtempSync(join(dir, 'allowed-'));
+    const elsewhere = mkdtempSync(join(dir, 'elsewhere-'));
+    const { fetchFn, ctx } = harness(
+      async () => new Response('%PDF', { status: 200 }),
+      realpathSync(allowed),
+    );
+    const r = await byName('download_statement').handler(
+      { format: 'invoice_pdf', invoice_number: 'INV-1', save_to_path: join(elsewhere, 'x.pdf') },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) {
+      expect(r.error.code).toBe('DOWNLOAD_DIR_NOT_ALLOWED');
+      expect(r.error.message).toContain('LABELGRID_DOWNLOAD_DIR');
+    }
+    // The refusal happens before any network call.
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('rejects a symlinked-parent escape out of the download directory', async () => {
+    const allowed = mkdtempSync(join(dir, 'root-'));
+    const outside = mkdtempSync(join(dir, 'outside-'));
+    // A symlink INSIDE the allowed root that points OUT of it must not let a
+    // write escape: the parent is realpath-resolved before the prefix check.
+    const escape = join(allowed, 'escape');
+    symlinkSync(outside, escape);
+    const { ctx } = harness(
+      async () => new Response('%PDF', { status: 200 }),
+      realpathSync(allowed),
+    );
+    const r = await byName('download_statement').handler(
+      { format: 'invoice_pdf', invoice_number: 'INV-1', save_to_path: join(escape, 'x.pdf') },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) expect(r.error.code).toBe('DOWNLOAD_DIR_NOT_ALLOWED');
   });
 
   it('never overwrites an existing PDF — returns FILE_EXISTS on the second write', async () => {

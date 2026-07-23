@@ -91,6 +91,7 @@ All configuration is via environment variables in your client config.
 | `LABELGRID_TOOLSETS` | all except `webhooks` | Comma-separated subset of toolsets to expose. |
 | `LABELGRID_TIMEOUT_MS` | `60000` | JSON request timeout in milliseconds. Must be a positive integer; a bad value is ignored with a warning. |
 | `LABELGRID_TRANSFER_TIMEOUT_MS` | `600000` | Upload/download transfer timeout in milliseconds (for presigned uploads and statement downloads). Same validation. |
+| `LABELGRID_DOWNLOAD_DIR` | `~/Downloads` if it exists, else the working directory | The only directory `download_statement` may write a `save_to_path` into; a path outside it is refused. |
 
 Valid toolsets (8): `account`, `reference`, `catalog`, `releases`, `insights`, `finance`, `webhooks`, `distribution`.
 
