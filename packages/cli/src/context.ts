@@ -10,7 +10,7 @@
  *   3. the --token flag (for CI)
  */
 
-import { LabelGridClient } from '@labelgrid/core';
+import { LabelGridClient, parseTimeoutMs } from '@labelgrid/core';
 import type { TokenStore } from './credentials.js';
 import { defaultTokenStore } from './credentials.js';
 import { CliError } from './errors.js';
@@ -31,7 +31,14 @@ export type CliClient = Pick<
   'get' | 'post' | 'patch' | 'put' | 'delete' | 'postMultipart' | 'raw' | 'getRaw'
 >;
 
-export type ClientOpts = { baseUrl: string; token: string };
+export type ClientOpts = {
+  baseUrl: string;
+  token: string;
+  /** JSON request timeout override (ms); undefined uses the client default. */
+  timeoutMs?: number;
+  /** Raw transfer timeout override (ms); undefined uses the client default. */
+  rawTimeoutMs?: number;
+};
 
 export type CliDeps = {
   env?: NodeJS.ProcessEnv;
@@ -54,6 +61,8 @@ export type GlobalOpts = {
   token?: string;
   apiUrl?: string;
   yes?: boolean;
+  timeout?: string;
+  transferTimeout?: string;
 };
 
 export type Resolved = {
@@ -109,6 +118,8 @@ export function resolveDeps(deps: CliDeps): Resolved {
           token: opts.token,
           version: VERSION,
           userAgent: `labelgrid-cli/${VERSION}`,
+          timeoutMs: opts.timeoutMs,
+          rawTimeoutMs: opts.rawTimeoutMs,
         })),
     readLine: deps.readLine ?? defaultReadLine,
     stdinIsTTY: deps.stdinIsTTY ?? process.stdin.isTTY === true,
@@ -132,6 +143,59 @@ export function resolveToken(
     return { token: flagToken.trim(), source: 'flag' };
   }
   return null;
+}
+
+/**
+ * Resolves one timeout: the flag wins over the env var; a non-positive-integer
+ * value (from either source) is ignored — the client default applies — and a
+ * single warning is written to stderr.
+ */
+function resolveOneTimeout(
+  flagValue: string | undefined,
+  flagName: string,
+  envValue: string | undefined,
+  envName: string,
+  stderr: Sink,
+): number | undefined {
+  const fromFlag = parseTimeoutMs(flagValue);
+  if (fromFlag.invalid) {
+    stderr.write(
+      `${flagName} must be a positive integer of milliseconds; ignoring "${flagValue}".\n`,
+    );
+  } else if (fromFlag.value !== undefined) {
+    return fromFlag.value;
+  }
+  const fromEnv = parseTimeoutMs(envValue);
+  if (fromEnv.invalid) {
+    stderr.write(
+      `${envName} must be a positive integer of milliseconds; ignoring "${envValue}".\n`,
+    );
+  }
+  return fromEnv.value;
+}
+
+/** Resolves both timeouts from the global flags and their env vars. */
+export function resolveTimeouts(
+  env: NodeJS.ProcessEnv,
+  globals: GlobalOpts,
+  stderr: Sink,
+): { timeoutMs: number | undefined; rawTimeoutMs: number | undefined } {
+  return {
+    timeoutMs: resolveOneTimeout(
+      globals.timeout,
+      '--timeout',
+      env.LABELGRID_TIMEOUT_MS,
+      'LABELGRID_TIMEOUT_MS',
+      stderr,
+    ),
+    rawTimeoutMs: resolveOneTimeout(
+      globals.transferTimeout,
+      '--transfer-timeout',
+      env.LABELGRID_TRANSFER_TIMEOUT_MS,
+      'LABELGRID_TRANSFER_TIMEOUT_MS',
+      stderr,
+    ),
+  };
 }
 
 /** Resolves the API base URL: --api-url flag > LABELGRID_API_URL env > default. */
@@ -179,8 +243,9 @@ export function buildContext(resolved: Resolved, globals: GlobalOpts): CommandCo
     throw new CliError(1);
   }
   const baseUrl = resolveBaseUrl(resolved.env, globals.apiUrl);
+  const { timeoutMs, rawTimeoutMs } = resolveTimeouts(resolved.env, globals, resolved.stderr);
   return {
-    client: resolved.createClient({ baseUrl, token: resolution.token }),
+    client: resolved.createClient({ baseUrl, token: resolution.token, timeoutMs, rawTimeoutMs }),
     out,
     yes: globals.yes === true,
     baseUrl,

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LABELGRID_TIMEOUT_MS` and `LABELGRID_TRANSFER_TIMEOUT_MS` configure the JSON
+  request timeout and the upload/download transfer timeout. A non-positive-
+  integer value is ignored with a warning and the built-in default applies.
+
 ### Changed
 
 - `download_statement` now streams the invoice PDF straight to disk instead of
