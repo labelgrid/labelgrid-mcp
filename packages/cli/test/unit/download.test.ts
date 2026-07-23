@@ -38,6 +38,24 @@ describe('download --track', () => {
     expect(r.stdout).toContain(out);
   });
 
+  it('streams a large binary body to disk byte-identically (no full buffering)', async () => {
+    const out = join(dir, 'big.wav');
+    // A multi-MB binary payload generated at test time (never committed).
+    const payload = Buffer.alloc(5 * 1024 * 1024);
+    for (let i = 0; i < payload.length; i++) payload[i] = i % 256;
+    const stub = makeStubClient({
+      resultFor: (method, path) =>
+        method === 'get' && path.endsWith('/download-url')
+          ? { data: { download_url: 'https://cdn.example.test/signed-file' } }
+          : undefined,
+      rawResponse: () => new Response(payload, { status: 200 }),
+    });
+    const r = await run(['download', '--track', '4', '--type', 'audio_24', '--out', out], { stub });
+    expect(r.code).toBe(0);
+    expect(readFileSync(out).equals(payload)).toBe(true);
+    expect(r.stdout).toContain(String(payload.length));
+  });
+
   it('maps the preview aliases onto the API asset names', async () => {
     const stub = trackStub();
     const r = await run(

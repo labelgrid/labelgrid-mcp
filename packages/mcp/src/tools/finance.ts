@@ -9,8 +9,10 @@
  * headers the client sends.
  */
 
-import { realpathSync, statSync, writeFileSync } from 'node:fs';
+import { createWriteStream, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { ApiError, ApiResult } from '@labelgrid/core';
 import { z } from 'zod';
 import { applyProjection } from '../projection.js';
@@ -83,6 +85,40 @@ function writeNewFile(path: string, data: string | Buffer): ApiError | null {
       status: 0,
     };
   }
+}
+
+/**
+ * Streams a web response body to a NEW file with exclusive creation ('wx'): an
+ * existing path is NEVER overwritten. Never buffers the whole body in memory.
+ * Returns the bytes written, FILE_EXISTS on collision, or a structured write
+ * error.
+ */
+async function streamNewFile(
+  path: string,
+  body: ReadableStream<Uint8Array> | null,
+): Promise<{ bytes: number } | ApiError> {
+  if (body === null) {
+    const err = writeNewFile(path, Buffer.alloc(0));
+    return err ?? { bytes: 0 };
+  }
+  const ws = createWriteStream(path, { flags: 'wx' });
+  try {
+    await pipeline(Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]), ws);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      return {
+        code: 'FILE_EXISTS',
+        message: `A file already exists at ${path}. This tool never overwrites — choose a new path.`,
+        status: 0,
+      };
+    }
+    return {
+      code: 'WRITE_FAILED',
+      message: `Could not write to ${path}: ${err instanceof Error ? err.message : 'unknown error'}.`,
+      status: 0,
+    };
+  }
+  return { bytes: statSync(path).size };
 }
 
 /** Maps an error HTTP status from a raw download into a structured code. */
@@ -276,10 +312,9 @@ const downloadStatement: ToolDef = {
       if (err) return { error: err };
       const result = await authedGet(ctx, `/statements/${encodeURIComponent(invoice)}/invoice`);
       if (!result.ok) return { error: result.error };
-      const bytes = Buffer.from(await result.res.arrayBuffer());
-      const writeErr = writeNewFile(savePath, bytes);
-      if (writeErr) return { error: writeErr };
-      return { data: { saved_to: savePath, bytes: bytes.length } };
+      const written = await streamNewFile(savePath, result.res.body);
+      if ('code' in written) return { error: written };
+      return { data: { saved_to: savePath, bytes: written.bytes } };
     }
 
     // format === 'csv'

@@ -57,6 +57,18 @@ export function makeStubClient(cfg: StubCfg = {}): { client: CliClient; calls: C
     ) => record('postMultipart', [path, filePath, fieldName, extra]),
     raw: async (url: string, init: RequestInit) => {
       calls.push({ method: 'raw', args: [url, init] });
+      // Real fetch consumes the request body; drain a stream body to completion
+      // so an upload's read stream is not left orphaned (an unconsumed stream
+      // would open/read after the test's temp files are cleaned up and throw).
+      const body = init.body as AsyncIterable<unknown> | null;
+      if (
+        body != null &&
+        typeof (body as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+      ) {
+        for await (const _chunk of body) {
+          // discard — only draining
+        }
+      }
       return cfg.rawResponse?.(url) ?? new Response(null, { status: 200 });
     },
   };

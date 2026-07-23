@@ -12,7 +12,7 @@
 import type { Command } from 'commander';
 import type { CommandContext, GlobalOpts, Resolved } from '../context.js';
 import { buildContext } from '../context.js';
-import { validateOutPath, writeDownload } from '../downloads.js';
+import { streamDownload, validateOutPath } from '../downloads.js';
 import { printData } from '../output.js';
 import { authedRawGet, failWith, runApi } from '../run.js';
 
@@ -70,10 +70,9 @@ async function downloadTrackAsset(
       status: res.status,
     });
   }
-  const bytes = Buffer.from(await res.arrayBuffer());
-  const writeErr = writeDownload(outPath, bytes, force);
-  if (writeErr) failWith(ctx, writeErr);
-  printData(ctx.out, { saved_to: outPath, bytes: bytes.length });
+  const written = await streamDownload(outPath, res.body, force);
+  if ('error' in written) failWith(ctx, written.error);
+  printData(ctx.out, { saved_to: outPath, bytes: written.bytes });
 }
 
 async function downloadStatementFile(
@@ -89,10 +88,9 @@ async function downloadStatementFile(
       : `/statements/${encodeURIComponent(invoice)}/invoice`;
   const result = await authedRawGet(ctx, path);
   if (!result.ok) failWith(ctx, result.error);
-  const bytes = Buffer.from(await result.res.arrayBuffer());
-  const writeErr = writeDownload(outPath, bytes, force);
-  if (writeErr) failWith(ctx, writeErr);
-  printData(ctx.out, { saved_to: outPath, bytes: bytes.length });
+  const written = await streamDownload(outPath, result.res.body, force);
+  if ('error' in written) failWith(ctx, written.error);
+  printData(ctx.out, { saved_to: outPath, bytes: written.bytes });
 }
 
 export function registerDownload(program: Command, resolved: Resolved): void {
