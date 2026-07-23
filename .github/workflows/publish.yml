@@ -85,10 +85,18 @@ jobs:
         if: steps.check.outputs.published == 'false'
         run: |
           CORE_VERSION=$(node -p "require('./packages/mcp/package.json').dependencies['@labelgrid/core']")
-          if ! npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
-            echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
-            exit 1
-          fi
+          # A lockstep release publishes core earlier in THIS run; the registry
+          # read path can lag the publish by up to a minute, so retry before
+          # failing closed.
+          for i in 1 2 3 4 5 6; do
+            if npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "@labelgrid/core@$CORE_VERSION not visible yet (attempt $i) — waiting..."
+            sleep 15
+          done
+          echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
+          exit 1
       - name: Publish @labelgrid/mcp to npm (provenance)
         if: steps.check.outputs.published == 'false'
         continue-on-error: false
@@ -110,10 +118,16 @@ jobs:
         if: steps.check_cli.outputs.published == 'false'
         run: |
           CORE_VERSION=$(node -p "require('./packages/cli/package.json').dependencies['@labelgrid/core']")
-          if ! npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
-            echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
-            exit 1
-          fi
+          # Same lockstep-lag retry as the server preflight above.
+          for i in 1 2 3 4 5 6; do
+            if npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "@labelgrid/core@$CORE_VERSION not visible yet (attempt $i) — waiting..."
+            sleep 15
+          done
+          echo "@labelgrid/core@$CORE_VERSION is not on the registry — publish it first." >&2
+          exit 1
       - name: Publish @labelgrid/cli to npm (provenance)
         if: steps.check_cli.outputs.published == 'false'
         continue-on-error: false
