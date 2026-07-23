@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible problem with the LabelGrid MCP server or CLI.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub Issues are public. Remove API tokens, credentials, account data, and other private information.
+        Report security vulnerabilities through the [private process](https://github.com/labelgrid/labelgrid-mcp/security/policy).
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - MCP server
+        - CLI
+        - Shared core client
+        - Packaging or installation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Package or bundle version where the problem occurs.
+      placeholder: "0.3.1"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: AI client or terminal, operating system, and Node.js version.
+      placeholder: "Claude Desktop, macOS 15, Node.js 22"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Smallest reliable sequence that demonstrates the problem.
+      placeholder: |
+        1. Configure ...
+        2. Call ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Optional logs or structured errors. Remove tokens and private data.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Public-report checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed credentials, account data, and other private information.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

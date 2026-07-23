@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=.constellation/project.schema.json
+config_version: 1
+project:
+  id: labelgrid-mcp
+  name: LabelGrid MCP
+  family: lg
+git_host:
+  provider: github
+  slug: labelgrid/labelgrid-mcp
+  default_branch: main
+tracker:
+  adapter: jira
+  project_key: DEV
+  status_map:
+    todo: To Do
+    needs-planning: On hold + needs-planning label
+    ready: To Do + llm-go label
+    in-progress: In Progress
+    pr-open: PR
+    done: Done (transition 31, resolution required)
+    canceled: Canceled (transition 81, Won't Do)
+    on-hold: On hold
+ci:
+  provider: github-actions
+testing:
+  default: npm test
+loops: []

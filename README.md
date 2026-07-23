@@ -67,6 +67,12 @@ npm run lint      # biome over the repo
 The MCP server binary after a build: `node packages/mcp/dist/index.js` (or `npm start`).
 The CLI binary after a build: `node packages/cli/dist/index.js`.
 
+## Contributing and issue tracking
+
+GitHub Issues are the public intake for bug reports and feature requests. Jira DEV is
+LabelGrid's internal source of truth for accepted work, planning, and execution. See
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening an issue or pull request.
+
 ## License
 
 [MIT](./LICENSE)

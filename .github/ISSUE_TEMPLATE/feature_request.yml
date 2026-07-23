@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a public-facing improvement to the LabelGrid MCP server or CLI.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitHub Issues are the public intake for LabelGrid MCP requests.
+        Accepted work is planned and tracked internally in Jira DEV.
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      options:
+        - MCP server
+        - CLI
+        - Shared core client
+        - Packaging or installation
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and what blocks you today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the result you want. API or tool design is optional.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional workarounds or related tools you tried.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Public-request checks
+      options:
+        - label: I searched existing issues for this request.
+          required: true
+        - label: I removed credentials, account data, and other private information.
+          required: true

@@ -314,7 +314,9 @@ Common codes: `TOKEN_INVALID` (401 — check your token), `FORBIDDEN` (403 — p
 
 ## Contributing
 
-Issues and pull requests are welcome. An API-coverage drift check runs in CI against a committed snapshot of the public API document and fails when the snapshot gains an endpoint this server does not expose (refresh the snapshot with `node scripts/fetch-openapi.mjs`). This repo uses:
+Public bug reports and feature requests belong in [GitHub Issues](https://github.com/labelgrid/labelgrid-mcp/issues). LabelGrid tracks accepted work and internal engineering tasks in Jira DEV. Pull requests are welcome; see the repository's [contribution guide](../../CONTRIBUTING.md).
+
+An API-coverage drift check runs in CI against a committed snapshot of the public API document and fails when the snapshot gains an endpoint this server does not expose (refresh the snapshot with `node scripts/fetch-openapi.mjs`). This repo uses:
 
 - **TypeScript** (strict ESM), Node 20+, with `@modelcontextprotocol/sdk` and `zod` as the only runtime dependencies.
 - **[Biome](https://biomejs.dev)** for lint + format (`npm run lint`).
