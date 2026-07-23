@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   FULL_WRITES_ACK,
@@ -85,6 +87,19 @@ describe('loadConfig timeouts', () => {
   it('rejects a non-integer or zero value', () => {
     expect(loadConfig(baseEnv({ LABELGRID_TIMEOUT_MS: '12.5' })).timeoutMs).toBeUndefined();
     expect(loadConfig(baseEnv({ LABELGRID_TIMEOUT_MS: '0' })).timeoutMs).toBeUndefined();
+  });
+});
+
+describe('loadConfig download directory', () => {
+  it('uses LABELGRID_DOWNLOAD_DIR when it points at a real directory', () => {
+    const c = loadConfig(baseEnv({ LABELGRID_DOWNLOAD_DIR: tmpdir() }));
+    expect(c.downloadDir).toBe(realpathSync(tmpdir()));
+  });
+
+  it('falls back to a real path (cwd or ~/Downloads) when the env var is unset', () => {
+    const c = loadConfig(baseEnv());
+    expect(typeof c.downloadDir).toBe('string');
+    expect((c.downloadDir as string).length).toBeGreaterThan(0);
   });
 });
 
