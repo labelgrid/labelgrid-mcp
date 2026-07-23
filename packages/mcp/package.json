@@ -1,15 +1,28 @@
 {
   "name": "@labelgrid/mcp",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "mcpName": "io.github.labelgrid/labelgrid-mcp",
-  "description": "Official LabelGrid MCP server — connect your AI client to your LabelGrid account",
+  "description": "Official LabelGrid MCP server \u2014 connect your AI client to your LabelGrid account",
   "type": "module",
-  "keywords": ["mcp", "model-context-protocol", "labelgrid", "music-distribution", "ai", "claude"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "labelgrid",
+    "music-distribution",
+    "ai",
+    "claude"
+  ],
   "main": "dist/index.js",
   "bin": {
     "labelgrid-mcp": "dist/index.js"
   },
-  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE", "server.json"],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "server.json"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -27,7 +40,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@labelgrid/core": "0.1.0",
+    "@labelgrid/core": "0.2.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^3.24.0"
   }
