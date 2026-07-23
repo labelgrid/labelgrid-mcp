@@ -8,7 +8,7 @@
  * A read-only override wins over everything.
  */
 
-import { log } from '@labelgrid/core';
+import { log, parseTimeoutMs } from '@labelgrid/core';
 
 export type Config = {
   baseUrl: string;
@@ -19,7 +19,23 @@ export type Config = {
   writes: boolean;
   fullWrites: boolean;
   toolsets: Set<string> | null;
+  /** JSON request timeout override (ms); undefined uses the client default. */
+  timeoutMs?: number;
+  /** Raw transfer (upload/download) timeout override (ms); undefined = default. */
+  rawTimeoutMs?: number;
 };
+
+/**
+ * Parses a timeout env var into a positive-integer ms, warning once (and
+ * falling back to the client default) when the value is not a positive integer.
+ */
+function timeoutFromEnv(raw: string | undefined, varName: string): number | undefined {
+  const parsed = parseTimeoutMs(raw);
+  if (parsed.invalid) {
+    log('warn', `${varName} must be a positive integer of milliseconds; ignoring "${raw}".`);
+  }
+  return parsed.value;
+}
 
 export const DEFAULT_BASE_URL = 'https://api.labelgrid.com/api/public';
 
@@ -76,6 +92,11 @@ function isTruthy(value: string | undefined): boolean {
 
 export function loadConfig(env: NodeJS.ProcessEnv): Config {
   const baseUrl = env.LABELGRID_API_URL?.trim() || DEFAULT_BASE_URL;
+  const timeoutMs = timeoutFromEnv(env.LABELGRID_TIMEOUT_MS, 'LABELGRID_TIMEOUT_MS');
+  const rawTimeoutMs = timeoutFromEnv(
+    env.LABELGRID_TRANSFER_TIMEOUT_MS,
+    'LABELGRID_TRANSFER_TIMEOUT_MS',
+  );
 
   const token = env.LABELGRID_API_TOKEN?.trim();
   if (!token) {
@@ -89,6 +110,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
       writes: false,
       fullWrites: false,
       toolsets: null,
+      timeoutMs,
+      rawTimeoutMs,
     };
   }
 
@@ -140,5 +163,14 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
     }
   }
 
-  return { baseUrl, token, setupMode: false, writes, fullWrites, toolsets };
+  return {
+    baseUrl,
+    token,
+    setupMode: false,
+    writes,
+    fullWrites,
+    toolsets,
+    timeoutMs,
+    rawTimeoutMs,
+  };
 }

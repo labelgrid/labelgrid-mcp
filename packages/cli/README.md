@@ -55,6 +55,8 @@ The CLI never echoes a token: every byte written to stdout or stderr is scrubbed
 | --- | --- |
 | `LABELGRID_API_TOKEN` | Your API token (highest-precedence credential). |
 | `LABELGRID_API_URL` | Override the API base URL (the `--api-url` flag beats it). |
+| `LABELGRID_TIMEOUT_MS` | JSON request timeout in milliseconds, default `60000` (the `--timeout` flag beats it). |
+| `LABELGRID_TRANSFER_TIMEOUT_MS` | Upload/download transfer timeout in milliseconds, default `600000` (the `--transfer-timeout` flag beats it). |
 
 ## Global flags
 
@@ -66,6 +68,8 @@ Every command accepts these, written before or after the subcommand:
 | `--token <token>` | Supply a token on the command line (lowest precedence). |
 | `--api-url <url>` | Override the API base URL for this invocation. |
 | `--yes` | Skip confirmation prompts on destructive commands. |
+| `--timeout <ms>` | JSON request timeout in milliseconds (a bad value is ignored with a warning). |
+| `--transfer-timeout <ms>` | Upload/download transfer timeout in milliseconds. |
 
 ## Command groups
 

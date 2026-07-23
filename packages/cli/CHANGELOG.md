@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Global `--timeout <ms>` and `--transfer-timeout <ms>` flags, plus the
+  `LABELGRID_TIMEOUT_MS` and `LABELGRID_TRANSFER_TIMEOUT_MS` environment
+  variables, to configure the JSON request and transfer timeouts. The flag beats
+  the env var; a non-positive-integer value is ignored with a warning.
+
 ### Changed
 
 - `download` now streams the file body straight to disk instead of buffering

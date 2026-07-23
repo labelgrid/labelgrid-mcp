@@ -46,6 +46,48 @@ describe('loadConfig base url + token', () => {
   });
 });
 
+describe('loadConfig timeouts', () => {
+  it('leaves both timeouts undefined when the env vars are unset (client default)', () => {
+    const c = loadConfig(baseEnv());
+    expect(c.timeoutMs).toBeUndefined();
+    expect(c.rawTimeoutMs).toBeUndefined();
+  });
+
+  it('parses positive-integer timeout env vars', () => {
+    const c = loadConfig(
+      baseEnv({ LABELGRID_TIMEOUT_MS: '30000', LABELGRID_TRANSFER_TIMEOUT_MS: '900000' }),
+    );
+    expect(c.timeoutMs).toBe(30000);
+    expect(c.rawTimeoutMs).toBe(900000);
+  });
+
+  it('ignores garbage and warns once, falling back to the client default (undefined)', () => {
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    let c: ReturnType<typeof loadConfig>;
+    try {
+      c = loadConfig(
+        baseEnv({ LABELGRID_TIMEOUT_MS: 'soon', LABELGRID_TRANSFER_TIMEOUT_MS: '-5' }),
+      );
+    } finally {
+      spy.mockRestore();
+    }
+    expect(c.timeoutMs).toBeUndefined();
+    expect(c.rawTimeoutMs).toBeUndefined();
+    const logged = writes.join('');
+    expect(logged).toContain('LABELGRID_TIMEOUT_MS');
+    expect(logged).toContain('LABELGRID_TRANSFER_TIMEOUT_MS');
+  });
+
+  it('rejects a non-integer or zero value', () => {
+    expect(loadConfig(baseEnv({ LABELGRID_TIMEOUT_MS: '12.5' })).timeoutMs).toBeUndefined();
+    expect(loadConfig(baseEnv({ LABELGRID_TIMEOUT_MS: '0' })).timeoutMs).toBeUndefined();
+  });
+});
+
 describe('loadConfig writes flags', () => {
   it('defaults writes to true', () => {
     expect(loadConfig(baseEnv()).writes).toBe(true);

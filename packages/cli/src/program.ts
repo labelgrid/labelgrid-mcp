@@ -42,6 +42,14 @@ export function buildProgram(deps: CliDeps = {}): Command {
     .option('--token <token>', 'API token (lowest precedence: env > stored > --token)')
     .option('--api-url <url>', 'API base URL override')
     .option('--yes', 'skip confirmation prompts on destructive commands')
+    .option(
+      '--timeout <ms>',
+      'JSON request timeout in milliseconds (overrides LABELGRID_TIMEOUT_MS)',
+    )
+    .option(
+      '--transfer-timeout <ms>',
+      'upload/download transfer timeout in milliseconds (overrides LABELGRID_TRANSFER_TIMEOUT_MS)',
+    )
     .exitOverride()
     .configureOutput({
       writeOut: (s) => resolved.stdout.write(s),
@@ -80,6 +88,8 @@ function addGlobalFlags(cmd: Command): void {
       ['--token <token>', 'API token (lowest precedence: env > stored > --token)'],
       ['--api-url <url>', 'API base URL override'],
       ['--yes', 'skip confirmation prompts on destructive commands'],
+      ['--timeout <ms>', 'JSON request timeout in milliseconds'],
+      ['--transfer-timeout <ms>', 'upload/download transfer timeout in milliseconds'],
     ] as const) {
       sub.addOption(new Option(flags[0], flags[1]).hideHelp());
     }

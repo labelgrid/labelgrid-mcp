@@ -34,6 +34,8 @@ async function main(): Promise<void> {
     baseUrl: config.baseUrl,
     token: config.token ?? '',
     version: VERSION,
+    timeoutMs: config.timeoutMs,
+    rawTimeoutMs: config.rawTimeoutMs,
   });
 
   if (config.setupMode) {
