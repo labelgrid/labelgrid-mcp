@@ -11,6 +11,17 @@ const PRESIGNED = 'https://storage.example.test/upload/target?sig=abc123';
 
 type Call = { url: string; init: RequestInit };
 
+/** Drains a request body (a Node read stream, a Uint8Array, or absent) to bytes. */
+async function streamToBuffer(body: unknown): Promise<Buffer | undefined> {
+  if (body == null) return undefined;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  const chunks: Buffer[] = [];
+  for await (const chunk of body as AsyncIterable<Buffer | Uint8Array>) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
 function client(fetchFn: typeof fetch): LabelGridClient {
   return new LabelGridClient({ baseUrl: BASE, token: 'secret-token', fetchFn, version: 't' });
 }
@@ -274,7 +285,7 @@ describe('uploadViaPresignedUrl', () => {
     expect('realPath' in guard).toBe(true);
     const realPath = 'realPath' in guard ? guard.realPath : '';
 
-    let putBody: Uint8Array | undefined;
+    let putBody: Buffer | undefined;
     const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
       if (u.endsWith('/upload-url')) {
@@ -286,7 +297,8 @@ describe('uploadViaPresignedUrl', () => {
         });
       }
       if (u.startsWith('https://storage.example.test')) {
-        putBody = init?.body as Uint8Array;
+        // The PUT body is now a read stream — drain it to bytes to compare.
+        putBody = await streamToBuffer(init?.body);
         return new Response(null, { status: 200 });
       }
       return new Response('{}', { status: 200 });
@@ -299,6 +311,63 @@ describe('uploadViaPresignedUrl', () => {
     });
     expect('data' in r).toBe(true);
     // The bytes PUT to storage are the original target's, not the decoy's.
-    expect(Buffer.from(putBody as Uint8Array)).toEqual(originalBytes);
+    expect(putBody).toEqual(originalBytes);
+  });
+
+  it('streams the PUT body and sets an explicit Content-Length (no chunked encoding)', async () => {
+    const big = join(dir, 'stream-me.wav');
+    const payload = Buffer.alloc(100 * 1024 * 1024); // ~100MB, generated not committed
+    payload.fill(0xab);
+    writeFileSync(big, payload);
+    let putInit: RequestInit | undefined;
+    let bodyIsStream = false;
+    let streamedBytes = 0;
+    const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith('/upload-url')) {
+        return new Response(JSON.stringify({ upload_url: PRESIGNED, key: 'abc/song.wav' }), {
+          status: 200,
+        });
+      }
+      if (u.startsWith('https://storage.example.test')) {
+        putInit = init;
+        const body = init?.body as unknown;
+        // A Node read stream is async-iterable / has .pipe — not a Buffer/Uint8Array.
+        bodyIsStream =
+          body != null &&
+          typeof (body as { pipe?: unknown }).pipe === 'function' &&
+          !(body instanceof Uint8Array);
+        streamedBytes = (await streamToBuffer(init?.body))?.length ?? 0;
+        return new Response(null, { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const r = await uploadViaPresignedUrl(client(fetchFn), {
+      uploadUrlPath: '/tracks/42/files/stereo/upload-url',
+      commitPath: '/tracks/42/files/stereo',
+      filePath: big,
+    });
+    expect('data' in r).toBe(true);
+    expect(bodyIsStream).toBe(true);
+    const contentLength = new Headers(putInit?.headers).get('content-length');
+    expect(contentLength).toBe(String(payload.length));
+    expect(streamedBytes).toBe(payload.length);
+    rmSync(big, { force: true });
+  });
+
+  it('returns FILE_TOO_LARGE (not FILE_NOT_FOUND) for a file over the ceiling', async () => {
+    const { fetchFn, calls } = flowStub();
+    // A tiny maxBytes override stands in for the 4 GiB ceiling.
+    const r = await uploadViaPresignedUrl(client(fetchFn), {
+      uploadUrlPath: '/tracks/42/files/stereo/upload-url',
+      commitPath: '/tracks/42/files/stereo',
+      filePath: wav,
+      maxBytes: 1,
+    });
+    expect('error' in r && r.error.code).toBe('FILE_TOO_LARGE');
+    expect('error' in r && r.error.message).toMatch(/over the 1-byte upload limit/);
+    // Fails locally before any network call.
+    expect(calls.length).toBe(0);
   });
 });

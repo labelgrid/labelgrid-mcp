@@ -461,11 +461,20 @@ export class LabelGridClient {
       };
     }
     const form = new FormData();
-    form.append(
-      fieldName,
-      new Blob([new Uint8Array(bytes)], { type: contentType(filePath) }),
-      basename(filePath),
-    );
+    // Wrap the buffer's bytes in a zero-copy Uint8Array VIEW (same underlying
+    // memory, honoring byteOffset/byteLength on a pooled Buffer), which the Blob
+    // then copies once. The previous `new Blob([new Uint8Array(bytes)])` made an
+    // extra full copy before the Blob's own copy — that redundant copy is gone.
+    // Node's FormData accepts a Blob field. Streaming multipart is not practical
+    // with undici's FormData (it materializes the parts), so this stays a single
+    // in-memory buffer — acceptable for the small files (images, PDFs, lyrics)
+    // that use the multipart path; the large binaries go through the streaming
+    // presigned-URL flow instead.
+    // The `as BlobPart` cast is only because the DOM lib types a Buffer's
+    // ArrayBufferLike (which could be a SharedArrayBuffer) too narrowly for
+    // BlobPart; the view is a valid Blob part at runtime.
+    const view = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) as BlobPart;
+    form.append(fieldName, new Blob([view], { type: contentType(filePath) }), basename(filePath));
     for (const [key, value] of Object.entries(extra ?? {})) {
       form.append(key, value);
     }

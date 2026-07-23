@@ -340,6 +340,20 @@ describe('download_statement format=invoice_pdf', () => {
     expect(d.bytes).toBe(5);
   });
 
+  it('streams a large PDF body to disk byte-identically', async () => {
+    const big = Buffer.alloc(3 * 1024 * 1024);
+    for (let i = 0; i < big.length; i++) big[i] = (i * 7) % 256;
+    const { ctx } = harness(async () => new Response(big, { status: 200 }));
+    const savePath = join(dir, 'big-invoice.pdf');
+    const r = await byName('download_statement').handler(
+      { format: 'invoice_pdf', invoice_number: 'INV-9', save_to_path: savePath },
+      ctx,
+    );
+    expect(readFileSync(savePath).equals(big)).toBe(true);
+    const d = data(r) as { saved_to: string; bytes: number };
+    expect(d.bytes).toBe(big.length);
+  });
+
   it('never overwrites an existing PDF — returns FILE_EXISTS on the second write', async () => {
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
     const { ctx } = harness(async () => new Response(pdfBytes, { status: 200 }));
