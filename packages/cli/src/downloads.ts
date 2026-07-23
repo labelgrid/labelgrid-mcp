@@ -12,6 +12,7 @@ import {
   createWriteStream,
   constants as fsConstants,
   linkSync,
+  openSync,
   realpathSync,
   renameSync,
   statSync,
@@ -140,10 +141,22 @@ export async function streamDownload(
   onProgress?: (bytesSoFar: number) => void,
 ): Promise<{ bytes: number } | { error: ApiError }> {
   if (body === null) {
-    // No body to stream (e.g. an empty response) — write an empty file with the
-    // same exclusive-create discipline (force replaces atomically at zero bytes).
-    const err = writeDownload(path, Buffer.alloc(0), force);
-    return err ? { error: err } : { bytes: 0 };
+    // No body to stream (e.g. an empty response). Without force, exclusive
+    // create as usual; with force, go through a temp + atomic rename so the
+    // existing file is never truncated ahead of a successful replacement.
+    if (!force) {
+      const err = writeDownload(path, Buffer.alloc(0), false);
+      return err ? { error: err } : { bytes: 0 };
+    }
+    const tmp = `${path}.partial-${process.pid}`;
+    try {
+      writeFileSync(tmp, Buffer.alloc(0), { flag: 'wx', mode: 0o600 });
+      renameSync(tmp, path);
+      return { bytes: 0 };
+    } catch (err) {
+      unlinkSafe(tmp);
+      return { error: writeFailedError(path, err) };
+    }
   }
   let source = Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]);
   let counted = 0;
@@ -172,20 +185,35 @@ async function streamToTempSibling(
     `${finalPath}.partial-${process.pid}`,
     `${finalPath}.partial-${process.pid}-${randomBytes(6).toString('hex')}`,
   ];
+  // Secure the temp fd BEFORE attaching the pipeline: pipeline() destroys its
+  // streams on failure, so an open-time EEXIST (stale temp) must be resolved
+  // without touching the source, or the retry would pipe a destroyed body.
+  let tmp: string | undefined;
+  let fd: number | undefined;
   let lastErr: unknown;
-  for (const tmp of candidates) {
-    const ws = createWriteStream(tmp, { flags: 'wx', mode: 0o600 });
+  for (const candidate of candidates) {
     try {
-      await pipeline(source, ws);
-      return { tmp };
+      fd = openSync(candidate, 'wx', 0o600);
+      tmp = candidate;
+      break;
     } catch (err) {
       lastErr = err;
-      if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue; // stale temp, not ours
-      unlinkSafe(tmp); // we created it, then the transfer failed — drop the partial
-      return { error: writeFailedError(finalPath, err) };
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+        return { error: writeFailedError(finalPath, err) };
+      }
     }
   }
-  return { error: writeFailedError(finalPath, lastErr) };
+  if (tmp === undefined || fd === undefined) {
+    return { error: writeFailedError(finalPath, lastErr) };
+  }
+  const ws = createWriteStream(tmp, { fd }); // autoClose closes the fd either way
+  try {
+    await pipeline(source, ws);
+    return { tmp };
+  } catch (err) {
+    unlinkSafe(tmp); // we created it, then the transfer failed — drop the partial
+    return { error: writeFailedError(finalPath, err) };
+  }
 }
 
 /**
@@ -214,6 +242,10 @@ function finalizeDownload(
         return { error: fileExistsError(path) };
       }
       if (code !== undefined && HARDLINK_UNSUPPORTED.has(code)) {
+        // Non-atomic fallback for filesystems without hardlinks: a reader can
+        // see the destination mid-copy (accepted for these rare filesystems),
+        // but an interrupted copy must not LEAVE a partial destination —
+        // COPYFILE_EXCL proved it did not pre-exist, so removing it is safe.
         try {
           copyFileSync(tmp, path, fsConstants.COPYFILE_EXCL);
         } catch (copyErr) {
@@ -221,6 +253,7 @@ function finalizeDownload(
           if ((copyErr as NodeJS.ErrnoException).code === 'EEXIST') {
             return { error: fileExistsError(path) };
           }
+          unlinkSafe(path);
           return { error: writeFailedError(path, copyErr) };
         }
       } else {

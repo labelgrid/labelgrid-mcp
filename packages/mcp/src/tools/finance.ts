@@ -15,6 +15,7 @@ import {
   createWriteStream,
   constants as fsConstants,
   linkSync,
+  openSync,
   realpathSync,
   statSync,
   unlinkSync,
@@ -228,20 +229,31 @@ async function streamToTempSibling(
     `${finalPath}.partial-${process.pid}`,
     `${finalPath}.partial-${process.pid}-${randomBytes(6).toString('hex')}`,
   ];
+  // Secure the temp fd BEFORE attaching the pipeline: pipeline() destroys its
+  // streams on failure, so an open-time EEXIST (stale temp) must be resolved
+  // without touching the source, or the retry would pipe a destroyed body.
+  let tmp: string | undefined;
+  let fd: number | undefined;
   let lastErr: unknown;
-  for (const tmp of candidates) {
-    const ws = createWriteStream(tmp, { flags: 'wx', mode: 0o600 });
+  for (const candidate of candidates) {
     try {
-      await pipeline(source, ws);
-      return { tmp };
+      fd = openSync(candidate, 'wx', 0o600);
+      tmp = candidate;
+      break;
     } catch (err) {
       lastErr = err;
-      if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue; // stale temp, not ours
-      unlinkSafe(tmp); // we created it, then the transfer failed — drop the partial
-      return writeFailed(finalPath, err);
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return writeFailed(finalPath, err);
     }
   }
-  return writeFailed(finalPath, lastErr);
+  if (tmp === undefined || fd === undefined) return writeFailed(finalPath, lastErr);
+  const ws = createWriteStream(tmp, { fd }); // autoClose closes the fd either way
+  try {
+    await pipeline(source, ws);
+    return { tmp };
+  } catch (err) {
+    unlinkSafe(tmp); // we created it, then the transfer failed — drop the partial
+    return writeFailed(finalPath, err);
+  }
 }
 
 /**
@@ -259,11 +271,16 @@ function finalizeNewFile(tmp: string, path: string): { bytes: number } | ApiErro
       return fileExists(path);
     }
     if (code !== undefined && HARDLINK_UNSUPPORTED.has(code)) {
+      // Non-atomic fallback for filesystems without hardlinks: a reader can see
+      // the destination mid-copy (accepted for these rare filesystems), but an
+      // interrupted copy must not LEAVE a partial destination — COPYFILE_EXCL
+      // proved it did not pre-exist, so removing it on failure is safe.
       try {
         copyFileSync(tmp, path, fsConstants.COPYFILE_EXCL);
       } catch (copyErr) {
         unlinkSafe(tmp);
         if ((copyErr as NodeJS.ErrnoException).code === 'EEXIST') return fileExists(path);
+        unlinkSafe(path);
         return writeFailed(path, copyErr);
       }
     } else {
