@@ -71,6 +71,15 @@ Every command accepts these, written before or after the subcommand:
 | `--timeout <ms>` | JSON request timeout in milliseconds (a bad value is ignored with a warning). |
 | `--transfer-timeout <ms>` | Upload/download transfer timeout in milliseconds. |
 
+## Transfer progress
+
+When stderr is an interactive terminal, `upload` and `download` show a single,
+in-place line with the bytes transferred (and the total when known), refreshed
+about twice a second. Progress is silent when stderr is not a TTY (piped or
+redirected) or under `--json`, so scripts and machine-readable output are never
+polluted. Cover-art uploads use a small buffered request and show no incremental
+progress.
+
 ## Command groups
 
 Run `labelgrid --help` or `labelgrid <group> --help` for full usage. One example per group:

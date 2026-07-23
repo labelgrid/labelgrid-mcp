@@ -6,11 +6,22 @@
  * and the parent flag (--track vs --release) must match the type.
  */
 
+import { statSync } from 'node:fs';
 import { assertAllowedExtension, uploadViaPresignedUrl } from '@labelgrid/core';
 import type { Command } from 'commander';
 import type { GlobalOpts, Resolved } from '../context.js';
 import { buildContext } from '../context.js';
+import { makeProgress } from '../progress.js';
 import { failWith, runApi } from '../run.js';
+
+/** Byte size of a file, or undefined when it cannot be stat-ed. */
+function fileSize(p: string): number | undefined {
+  try {
+    return statSync(p).size;
+  } catch {
+    return undefined;
+  }
+}
 
 type UploadSpec =
   | { parent: 'track'; flow: 'presigned'; fileType: string; exts: string[] }
@@ -78,31 +89,37 @@ export function registerUpload(program: Command, resolved: Resolved): void {
         if ('error' in ext) failWith(ctx, ext.error);
         if (spec.parent === 'track') {
           const id = encodeURIComponent(opts.track as string);
+          const progress = makeProgress(ctx.out, fileSize(ext.realPath));
           await runApi(
             ctx,
             uploadViaPresignedUrl(ctx.client, {
               uploadUrlPath: `/tracks/${id}/files/${spec.fileType}/upload-url`,
               commitPath: `/tracks/${id}/files/${spec.fileType}`,
               filePath: ext.realPath,
-            }),
+              onProgress: progress.onProgress,
+            }).finally(() => progress.done()),
           );
           return;
         }
         const id = encodeURIComponent(opts.release as string);
         if (spec.flow === 'multipart') {
+          // Cover art is small and goes through a single buffered multipart POST
+          // (no byte-stream hook), so it shows no incremental progress.
           await runApi(
             ctx,
             ctx.client.postMultipart(`/releases/${id}/photo`, ext.realPath, 'file'),
           );
           return;
         }
+        const progress = makeProgress(ctx.out, fileSize(ext.realPath));
         await runApi(
           ctx,
           uploadViaPresignedUrl(ctx.client, {
             uploadUrlPath: `/releases/${id}/files/${spec.assetType}/upload-url`,
             commitPath: `/releases/${id}/files/${spec.assetType}`,
             filePath: ext.realPath,
-          }),
+            onProgress: progress.onProgress,
+          }).finally(() => progress.done()),
         );
       },
     );

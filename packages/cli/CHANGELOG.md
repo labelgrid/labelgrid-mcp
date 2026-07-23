@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LABELGRID_TIMEOUT_MS` and `LABELGRID_TRANSFER_TIMEOUT_MS` environment
   variables, to configure the JSON request and transfer timeouts. The flag beats
   the env var; a non-positive-integer value is ignored with a warning.
+- `upload` and `download` now show an in-place transfer-progress line on an
+  interactive terminal (bytes transferred, and the total when known). It is
+  silent when stderr is not a TTY or under `--json`.
 
 ### Changed
 

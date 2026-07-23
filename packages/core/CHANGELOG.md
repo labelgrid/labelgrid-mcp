@@ -33,6 +33,8 @@ server and CLI — there are no API-stability promises before 1.0.
   is required — S3-compatible presigned PUTs reject a chunked body with 411.)
 - Multipart uploads no longer make a redundant in-memory copy of the file bytes
   before building the form Blob.
+- `UploadOptions` accepts an optional `onProgress` callback, invoked with the
+  running byte count as the presigned PUT streams (for a transfer-progress UI).
 
 ### Fixed
 

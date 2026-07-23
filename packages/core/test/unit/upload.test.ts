@@ -408,6 +408,27 @@ describe('presigned upload seam (mint / put / commit)', () => {
     expect(calls.map((x) => x.init.method)).toEqual(['POST', 'PUT', 'PUT']);
   });
 
+  it('reports upload progress up to the full byte count when onProgress is given', async () => {
+    const big = join(dir, 'progress.wav');
+    const payload = Buffer.alloc(256 * 1024);
+    payload.fill(0x11);
+    writeFileSync(big, payload);
+    const { fetchFn } = flowStub();
+    const seen: number[] = [];
+    const r = await uploadViaPresignedUrl(client(fetchFn), {
+      uploadUrlPath: '/tracks/42/files/stereo/upload-url',
+      commitPath: '/tracks/42/files/stereo',
+      filePath: big,
+      onProgress: (n) => seen.push(n),
+    });
+    expect('data' in r).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+    // The counts are monotonic and end at the full file size.
+    expect(seen[seen.length - 1]).toBe(payload.length);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+    rmSync(big, { force: true });
+  });
+
   it('mintUpload surfaces an UPLOAD_URL_INVALID when the response lacks a usable url/key', async () => {
     const fetchFn = vi.fn(
       async () => new Response(JSON.stringify({ nope: true }), { status: 200 }),
