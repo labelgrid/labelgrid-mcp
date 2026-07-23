@@ -16,8 +16,7 @@ import { pipeline } from 'node:stream/promises';
 import type { ApiError, ApiResult } from '@labelgrid/core';
 import { z } from 'zod';
 import { applyProjection } from '../projection.js';
-import { VERSION } from '../version.js';
-import type { ToolContext, ToolDef } from './types.js';
+import type { ToolDef } from './types.js';
 
 const INLINE_CSV_LIMIT = 100 * 1024;
 
@@ -119,62 +118,6 @@ async function streamNewFile(
     };
   }
   return { bytes: statSync(path).size };
-}
-
-/** Maps an error HTTP status from a raw download into a structured code. */
-function statusToCode(status: number): string {
-  if (status === 401) return 'TOKEN_INVALID';
-  if (status === 403) return 'FORBIDDEN';
-  if (status === 404) return 'NOT_FOUND';
-  if (status >= 500) return 'SERVER_ERROR';
-  return 'ERROR';
-}
-
-/** Authenticated raw GET for file downloads; returns the Response or an error. */
-async function authedGet(
-  ctx: ToolContext,
-  path: string,
-): Promise<{ ok: true; res: Response } | { ok: false; error: ApiError }> {
-  const base = ctx.config.baseUrl.replace(/\/+$/, '');
-  let res: Response;
-  try {
-    res = await ctx.client.raw(`${base}${path}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${ctx.config.token}`,
-        Accept: 'application/json',
-        'User-Agent': `labelgrid-mcp/${VERSION}`,
-      },
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'Network request failed.',
-        status: 0,
-      },
-    };
-  }
-  if (!res.ok) {
-    let message = `Request failed with status ${res.status}.`;
-    try {
-      const text = await res.text();
-      if (text) {
-        try {
-          const body = JSON.parse(text) as Record<string, unknown>;
-          if (typeof body.message === 'string') message = body.message;
-          else if (typeof body.error === 'string') message = body.error;
-        } catch {
-          message = text;
-        }
-      }
-    } catch {
-      // keep the default message
-    }
-    return { ok: false, error: { code: statusToCode(res.status), message, status: res.status } };
-  }
-  return { ok: true, res };
 }
 
 const queryFinancials: ToolDef = {
@@ -283,7 +226,7 @@ const downloadStatement: ToolDef = {
       ),
   },
   annotations: { readOnlyHint: true },
-  handler: async (args, ctx): Promise<ApiResult<unknown>> => {
+  handler: async (args, { client }): Promise<ApiResult<unknown>> => {
     const invoice = args.invoice_number as string | undefined;
     const savePath = args.save_to_path as string | undefined;
 
@@ -310,7 +253,7 @@ const downloadStatement: ToolDef = {
       }
       const err = validateSavePath(savePath);
       if (err) return { error: err };
-      const result = await authedGet(ctx, `/statements/${encodeURIComponent(invoice)}/invoice`);
+      const result = await client.getRaw(`/statements/${encodeURIComponent(invoice)}/invoice`);
       if (!result.ok) return { error: result.error };
       const written = await streamNewFile(savePath, result.res.body);
       if ('code' in written) return { error: written };
@@ -323,17 +266,16 @@ const downloadStatement: ToolDef = {
       if (err) return { error: err };
     }
     let path: string;
+    let query: Record<string, unknown> | undefined;
     if (invoice !== undefined && invoice !== '') {
       path = `/statements/${encodeURIComponent(invoice)}/csv`;
     } else {
-      const parts: string[] = [];
-      if (args.start_date !== undefined)
-        parts.push(`start_date=${encodeURIComponent(String(args.start_date))}`);
-      if (args.end_date !== undefined)
-        parts.push(`end_date=${encodeURIComponent(String(args.end_date))}`);
-      path = `/statements/export/csv${parts.length > 0 ? `?${parts.join('&')}` : ''}`;
+      // Let the core client serialize the range (its buildQuery), not a
+      // hand-rolled query string.
+      path = '/statements/export/csv';
+      query = { start_date: args.start_date, end_date: args.end_date };
     }
-    const result = await authedGet(ctx, path);
+    const result = await client.getRaw(path, query);
     if (!result.ok) return { error: result.error };
     const text = await result.res.text();
     const totalBytes = Buffer.byteLength(text);

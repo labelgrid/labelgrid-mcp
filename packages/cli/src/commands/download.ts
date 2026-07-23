@@ -14,7 +14,7 @@ import type { CommandContext, GlobalOpts, Resolved } from '../context.js';
 import { buildContext } from '../context.js';
 import { streamDownload, validateOutPath } from '../downloads.js';
 import { printData } from '../output.js';
-import { authedRawGet, failWith, runApi } from '../run.js';
+import { failWith, runApi } from '../run.js';
 
 /** CLI track asset names → the API asset path segment. */
 const TRACK_ASSETS: Record<string, string> = {
@@ -86,7 +86,7 @@ async function downloadStatementFile(
     type === 'csv'
       ? `/statements/${encodeURIComponent(invoice)}/csv`
       : `/statements/${encodeURIComponent(invoice)}/invoice`;
-  const result = await authedRawGet(ctx, path);
+  const result = await ctx.client.getRaw(path);
   if (!result.ok) failWith(ctx, result.error);
   const written = await streamDownload(outPath, result.res.body, force);
   if ('error' in written) failWith(ctx, written.error);

@@ -28,7 +28,7 @@ export const DEFAULT_BASE_URL = 'https://api.labelgrid.com/api/public';
  */
 export type CliClient = Pick<
   LabelGridClient,
-  'get' | 'post' | 'patch' | 'put' | 'delete' | 'postMultipart' | 'raw'
+  'get' | 'post' | 'patch' | 'put' | 'delete' | 'postMultipart' | 'raw' | 'getRaw'
 >;
 
 export type ClientOpts = { baseUrl: string; token: string };
