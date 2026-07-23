@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@labelgrid/core` is primarily an internal shared client for the LabelGrid MCP
 server and CLI — there are no API-stability promises before 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- Multipart uploads (cover art, license documents) now use the longer raw
+  transfer timeout instead of the 60s JSON request timeout, so a large file on
+  a slow uplink is no longer aborted mid-upload.
+
 ## [0.1.0] - 2026-07-20
 
 ### Added
