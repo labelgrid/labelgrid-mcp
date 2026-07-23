@@ -44,6 +44,9 @@ server and CLI — there are no API-stability promises before 1.0.
 - `raw()` now composes a caller-supplied `AbortSignal` with the transfer-timeout
   signal (`AbortSignal.any`) instead of letting the caller's signal silently
   replace and disable the timeout.
+- Presigned-upload progress reporting now forwards a source-stream error onto
+  the composed request body, so a file that becomes unreadable mid-transfer
+  fails cleanly as `UPLOAD_FAILED` instead of raising an unhandled stream error.
 
 ## [0.1.0] - 2026-07-20
 

@@ -132,14 +132,17 @@ export function registerDownload(program: Command, resolved: Resolved): void {
           );
         }
         const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
-        const pathErr = validateOutPath(opts.out);
-        if (pathErr) failWith(ctx, pathErr);
+        const validated = validateOutPath(opts.out);
+        if ('code' in validated) failWith(ctx, validated);
+        // Write to (and report) the realpath-resolved canonical path, closing the
+        // parent-symlink swap between validation and the write.
+        const outPath = validated.canonicalPath;
         const force = opts.force === true;
         if (opts.track !== undefined) {
-          await downloadTrackAsset(ctx, opts.track, TRACK_ASSETS[opts.type], opts.out, force);
+          await downloadTrackAsset(ctx, opts.track, TRACK_ASSETS[opts.type], outPath, force);
           return;
         }
-        await downloadStatementFile(ctx, opts.statement as string, opts.type, opts.out, force);
+        await downloadStatementFile(ctx, opts.statement as string, opts.type, outPath, force);
       },
     );
 }

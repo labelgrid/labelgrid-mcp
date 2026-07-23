@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mid-stream; a larger export returns `RESPONSE_TOO_LARGE` and must be saved to
   a path.
 
+### Fixed
+
+- `download_statement` now writes a `save_to_path` file via a temp sibling that
+  is atomically linked into place, so a failed download never leaves a partial
+  file, and reports `saved_to` as the realpath-resolved canonical path.
+
 ## [0.3.1] - 2026-07-20
 
 ### Changed

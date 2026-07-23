@@ -9,8 +9,18 @@
  * headers the client sends.
  */
 
-import { createWriteStream, realpathSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import {
+  copyFileSync,
+  createWriteStream,
+  constants as fsConstants,
+  linkSync,
+  realpathSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ApiError, ApiResult } from '@labelgrid/core';
@@ -40,7 +50,12 @@ async function readBoundedText(res: Response, max: number): Promise<string | Api
     status: res.status,
   };
   const declared = Number.parseInt(res.headers.get('Content-Length') ?? '', 10);
-  if (!Number.isNaN(declared) && declared > max) return tooLarge;
+  if (!Number.isNaN(declared) && declared > max) {
+    // Cancel the still-live body so the connection is released rather than held
+    // open (the mid-stream path below cancels via the reader).
+    await res.body?.cancel().catch(() => {});
+    return tooLarge;
+  }
   if (!res.body) {
     const text = await res.text();
     return Buffer.byteLength(text) > max ? tooLarge : text;
@@ -86,10 +101,17 @@ function isWithin(root: string, child: string): boolean {
  * inside that allow-list root, so a tool can only write under a sanctioned
  * directory even if an injected path points elsewhere. The parent is resolved
  * to its real target BEFORE the prefix check (the file itself does not exist
- * yet), so a symlinked parent cannot escape the root. Writing itself is
- * exclusive (see writeNewFile), so this never overwrites an existing file.
+ * yet), so a symlinked parent cannot escape the root. On success it RETURNS the
+ * canonical write path — `join(realpath(parent), basename)` — so the caller
+ * writes to the resolved location, not the caller-supplied path whose parent
+ * symlink could be swapped between this check and the write (a TOCTOU escape).
+ * Writing itself is exclusive (see writeNewFile), so this never overwrites an
+ * existing file.
  */
-function validateSavePath(p: string, allowedRoot: string | undefined): ApiError | null {
+function validateSavePath(
+  p: string,
+  allowedRoot: string | undefined,
+): { canonicalPath: string } | ApiError {
   if (!isAbsolute(p)) {
     return {
       code: 'INVALID_PATH',
@@ -128,7 +150,19 @@ function validateSavePath(p: string, allowedRoot: string | undefined): ApiError 
       status: 0,
     };
   }
-  return null;
+  return { canonicalPath: join(realDir, basename(p)) };
+}
+
+/** Filesystem errors that mean "hardlinks are not supported here". */
+const HARDLINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'ENOSYS']);
+
+/** Best-effort removal of a temp file — a missing file is not an error. */
+function unlinkSafe(p: string): void {
+  try {
+    unlinkSync(p);
+  } catch {
+    // already gone / never created — nothing to clean up
+  }
 }
 
 /**
@@ -157,10 +191,14 @@ function writeNewFile(path: string, data: string | Buffer): ApiError | null {
 }
 
 /**
- * Streams a web response body to a NEW file with exclusive creation ('wx'): an
- * existing path is NEVER overwritten. Never buffers the whole body in memory.
- * Returns the bytes written, FILE_EXISTS on collision, or a structured write
- * error.
+ * Streams a web response body to a NEW file, never overwriting an existing one
+ * and never leaving a partial file at the destination. The body is streamed to
+ * a temp sibling in the SAME directory (`<path>.partial-<pid>`, created 'wx'),
+ * then atomically hard-linked into place — the link is both atomic AND exclusive
+ * (EEXIST → FILE_EXISTS), so a transfer that fails mid-stream leaves NO file at
+ * `path` and NO temp sibling behind. On a filesystem without hardlinks
+ * (EPERM/ENOTSUP/EXDEV/…) it falls back to an exclusive copy (COPYFILE_EXCL).
+ * Never buffers the whole body in memory.
  */
 async function streamNewFile(
   path: string,
@@ -170,24 +208,87 @@ async function streamNewFile(
     const err = writeNewFile(path, Buffer.alloc(0));
     return err ?? { bytes: 0 };
   }
-  const ws = createWriteStream(path, { flags: 'wx' });
-  try {
-    await pipeline(Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]), ws);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-      return {
-        code: 'FILE_EXISTS',
-        message: `A file already exists at ${path}. This tool never overwrites — choose a new path.`,
-        status: 0,
-      };
+  const source = Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]);
+  const tmpResult = await streamToTempSibling(path, source);
+  if ('code' in tmpResult) return tmpResult;
+  return finalizeNewFile(tmpResult.tmp, path);
+}
+
+/**
+ * Streams `source` into a temp sibling of `finalPath`, created exclusively
+ * ('wx'). A collision with a stale temp (a dead process) is retried once with a
+ * random suffix. On a mid-stream failure the partial temp is removed. Returns
+ * the temp path, or a structured error.
+ */
+async function streamToTempSibling(
+  finalPath: string,
+  source: Readable,
+): Promise<{ tmp: string } | ApiError> {
+  const candidates = [
+    `${finalPath}.partial-${process.pid}`,
+    `${finalPath}.partial-${process.pid}-${randomBytes(6).toString('hex')}`,
+  ];
+  let lastErr: unknown;
+  for (const tmp of candidates) {
+    const ws = createWriteStream(tmp, { flags: 'wx', mode: 0o600 });
+    try {
+      await pipeline(source, ws);
+      return { tmp };
+    } catch (err) {
+      lastErr = err;
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue; // stale temp, not ours
+      unlinkSafe(tmp); // we created it, then the transfer failed — drop the partial
+      return writeFailed(finalPath, err);
     }
-    return {
-      code: 'WRITE_FAILED',
-      message: `Could not write to ${path}: ${err instanceof Error ? err.message : 'unknown error'}.`,
-      status: 0,
-    };
   }
+  return writeFailed(finalPath, lastErr);
+}
+
+/**
+ * Moves a finished temp file into `path` exclusively: a hard link (atomic +
+ * exclusive) with an exclusive-copy fallback where hardlinks are unavailable.
+ * The temp is always removed. Returns the byte count or a structured error.
+ */
+function finalizeNewFile(tmp: string, path: string): { bytes: number } | ApiError {
+  try {
+    linkSync(tmp, path);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      unlinkSafe(tmp);
+      return fileExists(path);
+    }
+    if (code !== undefined && HARDLINK_UNSUPPORTED.has(code)) {
+      try {
+        copyFileSync(tmp, path, fsConstants.COPYFILE_EXCL);
+      } catch (copyErr) {
+        unlinkSafe(tmp);
+        if ((copyErr as NodeJS.ErrnoException).code === 'EEXIST') return fileExists(path);
+        return writeFailed(path, copyErr);
+      }
+    } else {
+      unlinkSafe(tmp);
+      return writeFailed(path, err);
+    }
+  }
+  unlinkSafe(tmp);
   return { bytes: statSync(path).size };
+}
+
+function fileExists(path: string): ApiError {
+  return {
+    code: 'FILE_EXISTS',
+    message: `A file already exists at ${path}. This tool never overwrites — choose a new path.`,
+    status: 0,
+  };
+}
+
+function writeFailed(path: string, err: unknown): ApiError {
+  return {
+    code: 'WRITE_FAILED',
+    message: `Could not write to ${path}: ${err instanceof Error ? err.message : 'unknown error'}.`,
+    status: 0,
+  };
 }
 
 const queryFinancials: ToolDef = {
@@ -321,19 +422,22 @@ const downloadStatement: ToolDef = {
           },
         };
       }
-      const err = validateSavePath(savePath, config.downloadDir);
-      if (err) return { error: err };
+      const validated = validateSavePath(savePath, config.downloadDir);
+      if ('code' in validated) return { error: validated };
+      const canonicalPath = validated.canonicalPath;
       const result = await client.getRaw(`/statements/${encodeURIComponent(invoice)}/invoice`);
       if (!result.ok) return { error: result.error };
-      const written = await streamNewFile(savePath, result.res.body);
+      const written = await streamNewFile(canonicalPath, result.res.body);
       if ('code' in written) return { error: written };
-      return { data: { saved_to: savePath, bytes: written.bytes } };
+      return { data: { saved_to: canonicalPath, bytes: written.bytes } };
     }
 
     // format === 'csv'
+    let canonicalPath: string | undefined;
     if (savePath !== undefined) {
-      const err = validateSavePath(savePath, config.downloadDir);
-      if (err) return { error: err };
+      const validated = validateSavePath(savePath, config.downloadDir);
+      if ('code' in validated) return { error: validated };
+      canonicalPath = validated.canonicalPath;
     }
     let path: string;
     let query: Record<string, unknown> | undefined;
@@ -347,11 +451,11 @@ const downloadStatement: ToolDef = {
     }
     const result = await client.getRaw(path, query);
     if (!result.ok) return { error: result.error };
-    if (savePath !== undefined) {
+    if (canonicalPath !== undefined) {
       // Stream the export straight to disk — never buffer the whole CSV.
-      const written = await streamNewFile(savePath, result.res.body);
+      const written = await streamNewFile(canonicalPath, result.res.body);
       if ('code' in written) return { error: written };
-      return { data: { saved_to: savePath, bytes: written.bytes } };
+      return { data: { saved_to: canonicalPath, bytes: written.bytes } };
     }
     // Inline: read with the byte ceiling enforced (Content-Length + mid-stream).
     const text = await readBoundedText(result.res, MAX_INLINE_DOWNLOAD_BYTES);

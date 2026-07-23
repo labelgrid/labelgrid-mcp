@@ -1,6 +1,14 @@
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { type ApiResult, LabelGridClient } from '@labelgrid/core';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -206,7 +214,12 @@ describe('download_statement format=csv', () => {
     expect(url).toContain('end_date=2026-01-31');
   });
 
-  it('writes the CSV to an absolute save_to_path and reports bytes', async () => {
+  /** The canonical (realpath-resolved parent) form of a save path. */
+  function canonical(p: string): string {
+    return join(realpathSync(dirname(p)), basename(p));
+  }
+
+  it('writes the CSV to an absolute save_to_path and reports the canonical bytes', async () => {
     const { ctx } = harness(csvResponder);
     const savePath = join(dir, 'out.csv');
     const r = await byName('download_statement').handler(
@@ -216,8 +229,52 @@ describe('download_statement format=csv', () => {
     expect(existsSync(savePath)).toBe(true);
     expect(readFileSync(savePath, 'utf8')).toBe('a,b\n1,2\n');
     const d = data(r) as { saved_to: string; bytes: number };
-    expect(d.saved_to).toBe(savePath);
+    // saved_to is the realpath-resolved canonical path (F3).
+    expect(d.saved_to).toBe(canonical(savePath));
     expect(d.bytes).toBe(8);
+    // No temp sibling is left behind.
+    expect(readdirSync(dir).some((f) => f.includes('.partial-'))).toBe(false);
+  });
+
+  it('reports the canonical write path when the parent is a symlink (F3)', async () => {
+    const realDir = mkdtempSync(join(dir, 'real-'));
+    const linkDir = join(dir, 'via-link');
+    symlinkSync(realDir, linkDir);
+    // Allow-list the parent so the symlinked path is permitted.
+    const { ctx } = harness(csvResponder, realpathSync(dir));
+    const savePath = join(linkDir, 'out.csv');
+    const r = await byName('download_statement').handler(
+      { format: 'csv', invoice_number: 'INV-9', save_to_path: savePath },
+      ctx,
+    );
+    const d = data(r) as { saved_to: string; bytes: number };
+    // The file lands at (and is reported at) the resolved real directory, not the
+    // caller-supplied symlinked path.
+    expect(d.saved_to).toBe(join(realpathSync(realDir), 'out.csv'));
+    expect(readFileSync(join(realDir, 'out.csv'), 'utf8')).toBe('a,b\n1,2\n');
+  });
+
+  it('leaves no file and no temp sibling when the download fails mid-stream (F2)', async () => {
+    const failDir = mkdtempSync(join(dir, 'midfail-'));
+    // A body that yields a chunk then errors mid-stream.
+    const failingBody = () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+          controller.error(new Error('connection reset mid-stream'));
+        },
+      });
+    const { ctx } = harness(async () => new Response(failingBody(), { status: 200 }));
+    const savePath = join(failDir, 'partial.csv');
+    const r = await byName('download_statement').handler(
+      { format: 'csv', invoice_number: 'INV-9', save_to_path: savePath },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) expect(r.error.code).toBe('WRITE_FAILED');
+    // No file at the destination, and no temp sibling left behind.
+    expect(existsSync(savePath)).toBe(false);
+    expect(readdirSync(failDir)).toEqual([]);
   });
 
   it('rejects a relative save_to_path without any HTTP call', async () => {
@@ -254,6 +311,10 @@ describe('download_statement format=csv', () => {
     );
     expect(isErr(second)).toBe(true);
     if (isErr(second)) expect(second.error.code).toBe('FILE_EXISTS');
+    // The failed second write leaves no temp sibling behind.
+    expect(readdirSync(dir).some((f) => f.startsWith(`${basename(savePath)}.partial-`))).toBe(
+      false,
+    );
   });
 
   it('returns inline CSV truncated at 100KB with a truncated marker', async () => {
@@ -307,6 +368,32 @@ describe('download_statement format=csv', () => {
       expect(r.error.code).toBe('RESPONSE_TOO_LARGE');
       expect(r.error.message).toContain('save_to_path');
     }
+  });
+
+  it('cancels the response body on the too-large Content-Length path (F4)', async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const { ctx } = harness(
+      async () =>
+        new Response(body, {
+          status: 200,
+          headers: { 'Content-Length': String(11 * 1024 * 1024) },
+        }),
+    );
+    const r = await byName('download_statement').handler(
+      { format: 'csv', invoice_number: 'INV-BIG' },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) expect(r.error.code).toBe('RESPONSE_TOO_LARGE');
+    expect(cancelled).toBe(true);
   });
 
   it('bounds the inline CSV read mid-stream when the body has no Content-Length', async () => {
