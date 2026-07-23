@@ -21,6 +21,59 @@ import type { ToolDef } from './types.js';
 const INLINE_CSV_LIMIT = 100 * 1024;
 
 /**
+ * Hard ceiling on the CSV body read into memory when NO save_to_path is given.
+ * A larger export must be written to disk (save_to_path streams it); reading an
+ * unbounded body inline is exactly the memory blow-up this bound prevents.
+ */
+const MAX_INLINE_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Reads a text body with a byte ceiling enforced up front (Content-Length) AND
+ * mid-stream: it aborts the moment the running byte count crosses `max`, so an
+ * oversized body is never fully buffered. Returns the decoded text or a
+ * RESPONSE_TOO_LARGE error naming save_to_path as the way to handle a big export.
+ */
+async function readBoundedText(res: Response, max: number): Promise<string | ApiError> {
+  const tooLarge: ApiError = {
+    code: 'RESPONSE_TOO_LARGE',
+    message: `The export exceeds the ${max}-byte inline limit. Pass save_to_path to stream it to a file instead.`,
+    status: res.status,
+  };
+  const declared = Number.parseInt(res.headers.get('Content-Length') ?? '', 10);
+  if (!Number.isNaN(declared) && declared > max) return tooLarge;
+  if (!res.body) {
+    const text = await res.text();
+    return Buffer.byteLength(text) > max ? tooLarge : text;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > max) {
+        try {
+          await reader.cancel();
+        } catch {
+          // best-effort — the size bound is what matters
+        }
+        return tooLarge;
+      }
+      chunks.push(value);
+    }
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder('utf-8').decode(merged);
+}
+
+/**
  * Validates that save_to_path is absolute and its parent resolves (via
  * realpathSync, so a dangling/symlinked parent is rejected) to an existing real
  * directory. Writing itself is exclusive (see writeNewFile), so this never
@@ -277,13 +330,16 @@ const downloadStatement: ToolDef = {
     }
     const result = await client.getRaw(path, query);
     if (!result.ok) return { error: result.error };
-    const text = await result.res.text();
-    const totalBytes = Buffer.byteLength(text);
     if (savePath !== undefined) {
-      const writeErr = writeNewFile(savePath, text);
-      if (writeErr) return { error: writeErr };
-      return { data: { saved_to: savePath, bytes: totalBytes } };
+      // Stream the export straight to disk — never buffer the whole CSV.
+      const written = await streamNewFile(savePath, result.res.body);
+      if ('code' in written) return { error: written };
+      return { data: { saved_to: savePath, bytes: written.bytes } };
     }
+    // Inline: read with the byte ceiling enforced (Content-Length + mid-stream).
+    const text = await readBoundedText(result.res, MAX_INLINE_DOWNLOAD_BYTES);
+    if (typeof text !== 'string') return { error: text };
+    const totalBytes = Buffer.byteLength(text);
     const truncated = text.length > INLINE_CSV_LIMIT;
     const content = truncated ? text.slice(0, INLINE_CSV_LIMIT) : text;
     return { data: { content, truncated, bytes: totalBytes } };

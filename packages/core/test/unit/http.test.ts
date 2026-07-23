@@ -514,6 +514,34 @@ describe('request timeouts', () => {
     expect(sawSignal).toBe(true);
   });
 
+  it('raw() composes a caller signal with the timeout instead of replacing it', async () => {
+    // A caller-supplied signal must NOT disable the transfer timeout. With a tiny
+    // rawTimeoutMs and a never-aborting caller signal, the fetch still times out.
+    let seenSignal: AbortSignal | undefined;
+    const hangingFetch = ((_url: unknown, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        seenSignal = init?.signal ?? undefined;
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      })) as unknown as typeof fetch;
+    const client = new LabelGridClient({
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      fetchFn: hangingFetch,
+      version: '0.0.0-test',
+      rawTimeoutMs: 20,
+    });
+    const callerSignal = new AbortController().signal; // never aborts on its own
+    await expect(
+      client.raw('https://storage.example.test/presigned', {
+        method: 'GET',
+        signal: callerSignal,
+      }),
+    ).rejects.toBeDefined();
+    // The signal handed to fetch is the composed one, not the caller's verbatim.
+    expect(seenSignal).not.toBe(callerSignal);
+    expect(seenSignal?.aborted).toBe(true);
+  });
+
   it('maps a timeout that fires mid-stream to a structured TIMEOUT error', async () => {
     const stallingBody = new ReadableStream<Uint8Array>({
       start(controller) {
