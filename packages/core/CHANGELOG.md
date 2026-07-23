@@ -15,6 +15,10 @@ server and CLI — there are no API-stability promises before 1.0.
 - `MAX_UPLOAD_BYTES` (4 GiB) upload ceiling and a `FILE_TOO_LARGE` structured
   error. An oversized file is now rejected with an honest size-and-limit
   message instead of being mislabeled `FILE_NOT_FOUND`.
+- `mintUpload`, `putToPresignedUrl` and `commitUpload` — the presigned upload
+  flow's three steps are now individually exported and composed by
+  `uploadViaPresignedUrl`, so an alternate transport can reuse mint + commit and
+  swap only the byte-transfer step. Pure refactor; no behavior change.
 - `LabelGridClient.getRaw(path, query?)` — an authenticated raw GET for file
   downloads that returns the live response for streaming, or the same
   normalized structured error as the JSON path, honoring the raw transfer

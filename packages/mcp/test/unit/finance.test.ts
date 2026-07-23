@@ -432,14 +432,14 @@ describe('download_statement format=invoice_pdf', () => {
     const outside = mkdtempSync(join(dir, 'outside-'));
     // A symlink INSIDE the allowed root that points OUT of it must not let a
     // write escape: the parent is realpath-resolved before the prefix check.
-    const escape = join(allowed, 'escape');
-    symlinkSync(outside, escape);
+    const escapeLink = join(allowed, 'escape');
+    symlinkSync(outside, escapeLink);
     const { ctx } = harness(
       async () => new Response('%PDF', { status: 200 }),
       realpathSync(allowed),
     );
     const r = await byName('download_statement').handler(
-      { format: 'invoice_pdf', invoice_number: 'INV-1', save_to_path: join(escape, 'x.pdf') },
+      { format: 'invoice_pdf', invoice_number: 'INV-1', save_to_path: join(escapeLink, 'x.pdf') },
       ctx,
     );
     expect(isErr(r)).toBe(true);

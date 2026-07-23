@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { assertAllowedExtension } from '../../src/api/content-types.js';
 import { LabelGridClient } from '../../src/api/http.js';
-import { uploadViaPresignedUrl } from '../../src/api/upload.js';
+import {
+  commitUpload,
+  mintUpload,
+  putToPresignedUrl,
+  uploadViaPresignedUrl,
+} from '../../src/api/upload.js';
 
 const BASE = 'https://api.example.test/api/public';
 const PRESIGNED = 'https://storage.example.test/upload/target?sig=abc123';
@@ -43,6 +48,9 @@ function flowStub(putStatus = 200) {
       );
     }
     if (u.startsWith('https://storage.example.test')) {
+      // Real fetch consumes the request body; drain a stream body so the upload's
+      // read stream is not left orphaned (it would open after cleanup and throw).
+      await streamToBuffer(init?.body);
       return new Response(null, { status: putStatus });
     }
     return new Response(JSON.stringify({ id: 77, status: 'processing' }), { status: 200 });
@@ -369,5 +377,42 @@ describe('uploadViaPresignedUrl', () => {
     expect('error' in r && r.error.message).toMatch(/over the 1-byte upload limit/);
     // Fails locally before any network call.
     expect(calls.length).toBe(0);
+  });
+});
+
+describe('presigned upload seam (mint / put / commit)', () => {
+  let dir: string;
+  let wav: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lgmcp-seam-'));
+    wav = join(dir, 'song.wav');
+    writeFileSync(wav, Buffer.from([0x52, 0x49, 0x46, 0x46]));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('exposes the three steps independently and composes them the same as the whole flow', async () => {
+    const { fetchFn, calls } = flowStub();
+    const c = client(fetchFn);
+    const minted = await mintUpload(c, '/tracks/42/files/stereo/upload-url', 'song.wav');
+    expect('uploadUrl' in minted && minted.uploadUrl).toBe(PRESIGNED);
+    expect('key' in minted && minted.key).toBe('abc/song.wav');
+    if (!('uploadUrl' in minted)) throw new Error('mint failed');
+
+    const putError = await putToPresignedUrl(c, minted.uploadUrl, wav);
+    expect(putError).toBeNull();
+
+    const committed = await commitUpload(c, '/tracks/42/files/stereo', minted.key);
+    expect('data' in committed).toBe(true);
+
+    // mint(POST) + put(PUT) + commit(PUT) — the same three calls as the whole flow.
+    expect(calls.map((x) => x.init.method)).toEqual(['POST', 'PUT', 'PUT']);
+  });
+
+  it('mintUpload surfaces an UPLOAD_URL_INVALID when the response lacks a usable url/key', async () => {
+    const fetchFn = vi.fn(
+      async () => new Response(JSON.stringify({ nope: true }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const minted = await mintUpload(client(fetchFn), '/x/upload-url', 'song.wav');
+    expect('error' in minted && minted.error.code).toBe('UPLOAD_URL_INVALID');
   });
 });
