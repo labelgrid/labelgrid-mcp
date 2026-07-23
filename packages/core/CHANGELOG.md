@@ -35,6 +35,9 @@ server and CLI — there are no API-stability promises before 1.0.
 - Multipart uploads (cover art, license documents) now use the longer raw
   transfer timeout instead of the 60s JSON request timeout, so a large file on
   a slow uplink is no longer aborted mid-upload.
+- `raw()` now composes a caller-supplied `AbortSignal` with the transfer-timeout
+  signal (`AbortSignal.any`) instead of letting the caller's signal silently
+  replace and disable the timeout.
 
 ## [0.1.0] - 2026-07-20
 

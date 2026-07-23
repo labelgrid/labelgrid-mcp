@@ -286,6 +286,45 @@ describe('download_statement format=csv', () => {
     expect(isErr(r)).toBe(true);
     if (isErr(r)) expect(r.error.code).toBe('NOT_FOUND');
   });
+
+  it('bounds the inline CSV read: an over-limit Content-Length is RESPONSE_TOO_LARGE', async () => {
+    const { ctx } = harness(
+      async () =>
+        new Response('x', {
+          status: 200,
+          headers: { 'Content-Length': String(11 * 1024 * 1024) },
+        }),
+    );
+    const r = await byName('download_statement').handler(
+      { format: 'csv', invoice_number: 'INV-BIG' },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) {
+      expect(r.error.code).toBe('RESPONSE_TOO_LARGE');
+      expect(r.error.message).toContain('save_to_path');
+    }
+  });
+
+  it('bounds the inline CSV read mid-stream when the body has no Content-Length', async () => {
+    // A ~11MB chunked body (no Content-Length) is aborted mid-stream, never
+    // fully buffered, and returns RESPONSE_TOO_LARGE.
+    const chunk = new Uint8Array(6 * 1024 * 1024);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+    const { ctx } = harness(async () => new Response(body, { status: 200 }));
+    const r = await byName('download_statement').handler(
+      { format: 'csv', invoice_number: 'INV-BIG2' },
+      ctx,
+    );
+    expect(isErr(r)).toBe(true);
+    if (isErr(r)) expect(r.error.code).toBe('RESPONSE_TOO_LARGE');
+  });
 });
 
 describe('download_statement format=invoice_pdf', () => {

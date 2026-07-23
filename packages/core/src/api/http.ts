@@ -494,7 +494,13 @@ export class LabelGridClient {
    * Bearer token would break the signature.
    */
   raw(url: string, init: RequestInit): Promise<Response> {
-    return this.fetchFn(url, { signal: AbortSignal.timeout(this.rawTimeoutMs), ...init });
+    const timeoutSignal = AbortSignal.timeout(this.rawTimeoutMs);
+    // Compose, never replace: spreading `...init` last would let a caller-supplied
+    // signal silently drop the transfer timeout. AbortSignal.any aborts when
+    // EITHER the caller's signal or the timeout fires, so the timeout always holds.
+    const signal =
+      init.signal != null ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
+    return this.fetchFn(url, { ...init, signal });
   }
 
   /**

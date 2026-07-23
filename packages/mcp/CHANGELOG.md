@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `download_statement` now streams the invoice PDF straight to disk instead of
-  buffering the whole file in memory.
+- `download_statement` now streams both the invoice PDF and a saved CSV export
+  straight to disk instead of buffering the whole file in memory. An inline CSV
+  (no `save_to_path`) is read with a 10 MB byte ceiling enforced up front and
+  mid-stream; a larger export returns `RESPONSE_TOO_LARGE` and must be saved to
+  a path.
 
 ## [0.3.1] - 2026-07-20
 
