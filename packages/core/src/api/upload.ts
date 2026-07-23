@@ -69,59 +69,64 @@ function fileTooLargeError(size: number, limit: number): ApiError {
   };
 }
 
-export async function uploadViaPresignedUrl(
-  client: UploadHttp,
-  opts: UploadOptions,
-): Promise<ApiResult<unknown>> {
-  const limit = opts.maxBytes ?? MAX_UPLOAD_BYTES;
+/**
+ * THE SEAM: the presigned flow is three independently-callable steps —
+ * {@link mintUpload} (get a signed URL + key), {@link putToPresignedUrl} (send
+ * the bytes), {@link commitUpload} (record the object) — and
+ * {@link uploadViaPresignedUrl} just composes them. An alternate transport that
+ * does the PUT out of process (e.g. a browser or a worker doing the byte
+ * transfer directly) can reuse mint + commit and swap only the middle step,
+ * without reimplementing the URL-minting or commit contracts.
+ */
 
-  // Fail fast and locally: never touch the network for a file we cannot read,
-  // and reject an oversized file with an honest size error (not FILE_NOT_FOUND).
-  const initialStat = statReadableFile(opts.filePath);
-  if (initialStat === null) {
-    const error: ApiError = {
-      code: 'FILE_NOT_FOUND',
-      message: `No readable file at ${opts.filePath}.`,
-      status: 0,
-    };
-    return { error };
-  }
-  if (initialStat.size > limit) {
-    return { error: fileTooLargeError(initialStat.size, limit) };
-  }
+/** The result of minting a presigned URL: the signed URL + object key, or an error. */
+export type MintResult = { uploadUrl: string; key: string } | { error: ApiError };
 
-  // Step 1: mint the presigned URL.
-  const minted = await client.post<UploadUrlResponse>(opts.uploadUrlPath, {
-    filename: basename(opts.filePath),
-  });
-  if ('error' in minted) return minted;
+/** Step 1: mint the presigned URL + object key for `filename`. */
+export async function mintUpload(
+  client: Pick<UploadHttp, 'post'>,
+  uploadUrlPath: string,
+  filename: string,
+): Promise<MintResult> {
+  const minted = await client.post<UploadUrlResponse>(uploadUrlPath, { filename });
+  if ('error' in minted) return { error: minted.error };
   const uploadUrl = minted.data?.upload_url;
   const key = minted.data?.key;
   if (typeof uploadUrl !== 'string' || typeof key !== 'string') {
-    const error: ApiError = {
-      code: 'UPLOAD_URL_INVALID',
-      message: 'The upload-url response did not contain a usable upload_url and key.',
-      status: 0,
+    return {
+      error: {
+        code: 'UPLOAD_URL_INVALID',
+        message: 'The upload-url response did not contain a usable upload_url and key.',
+        status: 0,
+      },
     };
-    return { error };
   }
+  return { uploadUrl, key };
+}
 
-  // Step 2: PUT the bytes directly to storage — NO auth header (the URL is signed).
-  // The file passed the stat above, but it can vanish before this transfer (a
-  // TOCTOU race); a structured FILE_NOT_FOUND is the contract, not a throw. Re-stat
-  // here so Content-Length is the file's current size at the moment of upload.
-  const uploadStat = statReadableFile(opts.filePath);
-  if (uploadStat === null) {
-    const error: ApiError = {
+/**
+ * Step 2: stream the file's bytes to the presigned URL — NO auth header (the URL
+ * is signed). Re-stats the file so Content-Length is its size at upload time,
+ * enforcing the byte ceiling and the FILE_NOT_FOUND (TOCTOU) contract there.
+ * Returns null on success, or a structured error.
+ */
+export async function putToPresignedUrl(
+  client: Pick<UploadHttp, 'raw'>,
+  uploadUrl: string,
+  filePath: string,
+  maxBytes: number = MAX_UPLOAD_BYTES,
+): Promise<ApiError | null> {
+  // The file may vanish between an earlier stat and this transfer (a TOCTOU
+  // race); a structured FILE_NOT_FOUND is the contract, not a throw.
+  const stat = statReadableFile(filePath);
+  if (stat === null) {
+    return {
       code: 'FILE_NOT_FOUND',
-      message: `The file at ${opts.filePath} could not be read.`,
+      message: `The file at ${filePath} could not be read.`,
       status: 0,
     };
-    return { error };
   }
-  if (uploadStat.size > limit) {
-    return { error: fileTooLargeError(uploadStat.size, limit) };
-  }
+  if (stat.size > maxBytes) return fileTooLargeError(stat.size, maxBytes);
   let putRes: Response;
   try {
     // A stream body must declare Content-Length (a chunked PUT is rejected 411 by
@@ -129,10 +134,10 @@ export async function uploadViaPresignedUrl(
     const putInit = {
       method: 'PUT',
       headers: {
-        'Content-Type': contentType(opts.filePath),
-        'Content-Length': String(uploadStat.size),
+        'Content-Type': contentType(filePath),
+        'Content-Length': String(stat.size),
       },
-      body: createReadStream(opts.filePath),
+      body: createReadStream(filePath),
       duplex: 'half',
     } as unknown as RequestInit;
     putRes = await client.raw(uploadUrl, putInit);
@@ -143,23 +148,54 @@ export async function uploadViaPresignedUrl(
       reason:
         err instanceof Error ? err.message.replace(/https?:\/\/\S+/gi, '[url]') : 'network error',
     });
-    const error: ApiError = {
-      code: 'UPLOAD_FAILED',
-      message: 'Uploading the file to storage failed.',
-      status: 0,
-    };
-    return { error };
+    return { code: 'UPLOAD_FAILED', message: 'Uploading the file to storage failed.', status: 0 };
   }
   if (!putRes.ok) {
-    // Abort BEFORE the commit — a half-uploaded object is never finalized.
-    const error: ApiError = {
+    return {
       code: 'UPLOAD_FAILED',
       message: `Uploading the file to storage failed with status ${putRes.status}.`,
       status: putRes.status,
     };
-    return { error };
+  }
+  return null;
+}
+
+/** Step 3: commit the uploaded object key (idempotent — a retried commit will not duplicate). */
+export function commitUpload(
+  client: Pick<UploadHttp, 'put'>,
+  commitPath: string,
+  key: string,
+): Promise<ApiResult<unknown>> {
+  return client.put(commitPath, { s3_key: key }, { idempotency: true });
+}
+
+export async function uploadViaPresignedUrl(
+  client: UploadHttp,
+  opts: UploadOptions,
+): Promise<ApiResult<unknown>> {
+  const limit = opts.maxBytes ?? MAX_UPLOAD_BYTES;
+
+  // Fail fast and locally: never touch the network for a file we cannot read,
+  // and reject an oversized file with an honest size error (not FILE_NOT_FOUND).
+  const initialStat = statReadableFile(opts.filePath);
+  if (initialStat === null) {
+    return {
+      error: {
+        code: 'FILE_NOT_FOUND',
+        message: `No readable file at ${opts.filePath}.`,
+        status: 0,
+      },
+    };
+  }
+  if (initialStat.size > limit) {
+    return { error: fileTooLargeError(initialStat.size, limit) };
   }
 
-  // Step 3: commit the object key (idempotent — a retried commit will not duplicate).
-  return client.put(opts.commitPath, { s3_key: key }, { idempotency: true });
+  // Compose the seam: mint → PUT the bytes → commit. A failed PUT aborts before
+  // the commit, so a half-uploaded object is never finalized.
+  const minted = await mintUpload(client, opts.uploadUrlPath, basename(opts.filePath));
+  if ('error' in minted) return { error: minted.error };
+  const putError = await putToPresignedUrl(client, minted.uploadUrl, opts.filePath, limit);
+  if (putError !== null) return { error: putError };
+  return commitUpload(client, opts.commitPath, minted.key);
 }
