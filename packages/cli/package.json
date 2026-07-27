@@ -1,7 +1,7 @@
 {
   "name": "@labelgrid/cli",
-  "version": "0.2.0",
-  "description": "Official LabelGrid CLI \u2014 manage your catalog, releases, distribution and royalties from the terminal",
+  "version": "0.3.0",
+  "description": "Official LabelGrid CLI — manage your catalog, releases, distribution and royalties from the terminal",
   "type": "module",
   "keywords": ["labelgrid", "music-distribution", "cli"],
   "main": "dist/program.js",

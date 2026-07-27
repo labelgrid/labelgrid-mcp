@@ -5,6 +5,32 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-27
+
+### Added
+
+- `get_analytics_availability` — one static call returning the section-by-platform
+  `availability` matrix and the per-platform `platform_cadence` map (`daily` or
+  `weekly`). Fetch it once before `get_analytics` so an unreported section is
+  treated as unavailable rather than as an empty chart.
+- 22 new analytics section keys (37 total), including library adds, shazams
+  (plus by-city and by-state), playlist adds, detailed source split, discovery
+  and repeat rates, listener plan mix, listeners by region, Apple streams by
+  city, Apple discovery cohorts, average listen time, and hour-of-day.
+- 7 new `platform` filter values (10 total): `DEEZER`, `BOOMPLAY`, `AWA`,
+  `AUDIOMACK`, `KUGOU`, `KUWO`, `QQMUSIC`. The three Tencent platforms report
+  weekly — one point per week carrying the whole week.
+
+### Changed
+
+- **Breaking:** `get_analytics` now requires `metrics` (1–12 section keys per
+  request), matching the API contract. Split a larger selection across
+  requests — responses are cached per scope and window.
+- The reporting window cap rose from 30 to 400 days. Windows over 90 days draw
+  a separate, lower rate budget; a 429 response carries `retry_after_seconds`.
+- Tool descriptions across the catalog were tightened. No tool names,
+  parameters, or behavior changed beyond the items above.
+
 ## [0.4.0] - 2026-07-23
 
 ### Added

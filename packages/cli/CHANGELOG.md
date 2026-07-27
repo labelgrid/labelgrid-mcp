@@ -5,6 +5,21 @@ All notable changes to `@labelgrid/cli` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-27
+
+### Added
+
+- `labelgrid analytics availability` — prints the section-by-platform
+  availability matrix and the per-platform reporting cadence.
+
+### Changed
+
+- **Breaking:** `labelgrid analytics get` now requires `--metrics` (1–12
+  section keys), matching the API contract.
+- `--platform` accepts all 10 platforms, including `DEEZER`, `BOOMPLAY`,
+  `AWA`, `AUDIOMACK`, `KUGOU`, `KUWO`, and `QQMUSIC`.
+- The reporting window cap rose from 30 to 400 days.
+
 ## [0.2.0] - 2026-07-23
 
 ### Added
