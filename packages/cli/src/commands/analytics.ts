@@ -1,7 +1,9 @@
 /**
- * `labelgrid analytics get` — the streaming analytics summary. `--start` and
- * `--end` are required (the server caps the window at 30 days); `--metrics`
- * narrows to a comma-separated subset of the 15 metric sections.
+ * `labelgrid analytics get` — the streaming analytics summary. `--start`,
+ * `--end` and `--metrics` are required (the server caps the window at 400 days
+ * and accepts 1-12 section keys per request out of the 37 available).
+ * `labelgrid analytics availability` — the static section-by-platform
+ * availability matrix and per-platform reporting cadence.
  */
 
 import type { Command } from 'commander';
@@ -16,9 +18,12 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
     .command('get')
     .description('Retrieve a streaming analytics summary for a date window')
     .requiredOption('--start <date>', 'window start, YYYY-MM-DD')
-    .requiredOption('--end <date>', 'window end, YYYY-MM-DD (max 30-day span)')
-    .option('--metrics <list>', 'comma-separated metric sections (omit for all 15)')
-    .option('--platform <name>', 'SPOTIFY, ITUNES or APPLE_MUSIC')
+    .requiredOption('--end <date>', 'window end, YYYY-MM-DD (max 400-day span)')
+    .requiredOption('--metrics <list>', 'comma-separated section keys, 1-12 per request')
+    .option(
+      '--platform <name>',
+      'SPOTIFY, ITUNES, APPLE_MUSIC, DEEZER, BOOMPLAY, AWA, AUDIOMACK, KUGOU, KUWO or QQMUSIC',
+    )
     .option('--release-id <id>', 'narrow to one release')
     .option('--isrc <isrc>', 'narrow to one ISRC')
     .option('--upc <upc>', 'narrow to one UPC')
@@ -28,7 +33,7 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
         opts: {
           start: string;
           end: string;
-          metrics?: string;
+          metrics: string;
           platform?: string;
           releaseId?: string;
           isrc?: string;
@@ -55,4 +60,12 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
         );
       },
     );
+
+  analytics
+    .command('availability')
+    .description('Show the section-by-platform availability matrix and reporting cadence')
+    .action(async (_opts: Record<string, never>, cmd: Command) => {
+      const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
+      await runApi(ctx, ctx.client.get('/analytics/availability'));
+    });
 }

@@ -1,7 +1,7 @@
 /**
- * Insights toolset: the streaming analytics summary and the consolidated
- * artificial-streaming query (early-warning flags, reported records, and the
- * fee breakdown). All read-only.
+ * Insights toolset: the streaming analytics summary, the availability-discovery
+ * endpoint, and the consolidated artificial-streaming query (early-warning
+ * flags, reported records, and the fee breakdown). All read-only.
  */
 
 import type { ApiResult } from '@labelgrid/core';
@@ -9,7 +9,10 @@ import { z } from 'zod';
 import { applyProjection } from '../projection.js';
 import type { ToolDef } from './types.js';
 
-/** The 15 metric sections the summary endpoint can return. */
+/**
+ * The 37 metric sections the summary endpoint can return, in the server's
+ * canonical order.
+ */
 const METRICS = [
   'streams',
   'listeners',
@@ -26,6 +29,45 @@ const METRICS = [
   'streams-by-gender',
   'streams-by-age',
   'shares-by-country',
+  'library-adds',
+  'shazams',
+  'playlist-adds',
+  'source-split-detailed',
+  'discovery-rate',
+  'repeat-rate',
+  'listener-plan-mix',
+  'listeners-by-age',
+  'listeners-by-gender',
+  'listeners-by-region',
+  'apple-streams-by-city',
+  'apple-streams-by-storefront',
+  'apple-discovery-cohorts',
+  'avg-listen-time',
+  'shuffle-rate',
+  'promoted-rate',
+  'device-breakdown',
+  'os-split',
+  'audio-format-split',
+  'hour-of-day',
+  'shazams-by-city',
+  'shazams-by-state',
+] as const;
+
+/** The maximum number of section keys the server accepts per summary request. */
+const MAX_METRICS_PER_REQUEST = 12;
+
+/** The platform values `filter[platform]` accepts (APPLE_MUSIC aliases ITUNES). */
+const PLATFORMS = [
+  'SPOTIFY',
+  'ITUNES',
+  'APPLE_MUSIC',
+  'DEEZER',
+  'BOOMPLAY',
+  'AWA',
+  'AUDIOMACK',
+  'KUGOU',
+  'KUWO',
+  'QQMUSIC',
 ] as const;
 
 const getAnalytics: ToolDef = {
@@ -34,18 +76,19 @@ const getAnalytics: ToolDef = {
   gate: 'read',
   title: 'Get streaming analytics',
   description:
-    'Retrieve a streaming analytics summary for your catalog in a single call. `start_date` and `end_date` (both YYYY-MM-DD) are required and the window is capped at 30 days by the server. ' +
-    'Optionally narrow the result by `platform` (SPOTIFY, ITUNES, APPLE_MUSIC), `release_id`, `isrc`, `upc`, or `artist_names`. ' +
-    'By default all 15 metric sections are returned; pass `metrics` (see its enum) to request only a subset. ' +
-    'Rate-limited (about 60 requests per minute); a 429 response carries retry_after_seconds.',
+    'Streaming analytics summary. Window capped at 400 days; `metrics` takes 1-12 section keys per request (split larger selections — responses are cached). ' +
+    'KUGOU/KUWO/QQMUSIC report weekly: one point per week carrying the whole week — never average it per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
+    'Call get_analytics_availability first for section-per-platform support. ' +
+    'Rate-limited ~60/min; windows over 90 days draw a separate lower ~30/min budget — prefer shorter windows for polling. A 429 carries retry_after_seconds.',
   inputShape: {
     start_date: z.string().describe('Start of the reporting window, YYYY-MM-DD.'),
-    end_date: z.string().describe('End of the reporting window, YYYY-MM-DD (max 30-day span).'),
+    end_date: z.string().describe('End of the reporting window, YYYY-MM-DD (max 400-day span).'),
     metrics: z
       .array(z.enum(METRICS))
-      .optional()
-      .describe('Subset of metric sections to return; omit for all 15.'),
-    platform: z.enum(['SPOTIFY', 'ITUNES', 'APPLE_MUSIC']).optional(),
+      .min(1)
+      .max(MAX_METRICS_PER_REQUEST)
+      .describe('Section keys to return, 1-12 per request.'),
+    platform: z.enum(PLATFORMS).optional(),
     release_id: z.number().int().positive().optional(),
     isrc: z.string().optional(),
     upc: z.string().optional(),
@@ -69,17 +112,30 @@ const getAnalytics: ToolDef = {
     }),
 };
 
+const getAnalyticsAvailability: ToolDef = {
+  name: 'get_analytics_availability',
+  toolset: 'insights',
+  gate: 'read',
+  title: 'Get analytics availability',
+  description:
+    'Static `availability` matrix (per section, per platform) plus `platform_cadence` (daily|weekly per platform). Account- and date-independent: fetch once, reuse. ' +
+    'Read it before get_analytics so an unreported section is treated as unavailable, not an empty chart.',
+  inputShape: {},
+  annotations: { readOnlyHint: true },
+  handler: (_args, { client }) => client.get('/analytics/availability'),
+};
+
 const queryArtificialStreaming: ToolDef = {
   name: 'query_artificial_streaming',
   toolset: 'insights',
   gate: 'read',
   title: 'Query artificial-streaming data',
   description:
-    'Query artificial-streaming (streaming-integrity) data for your catalog. Pick ONE view with `view`: ' +
-    '`flags` lists Stream Radar early-warning flags surfacing possible artificial-streaming activity so you can act early, paginated — `filters`: status, severity, dsp, isrc, release_id, detected_from/detected_to (YYYY-MM-DD). ' +
-    '`flag_detail` retrieves one flag by `flag_id` (required). Stream Radar is an optional add-on; without it the API returns a 403, surfaced verbatim. ' +
-    '`records` lists the artificial-streaming records reported for your catalog, cursor-paginated — the per-record detail behind any artificial-streaming fee; `filters`: dsp (spotify or apple), start_date/end_date, release_id, isrc. ' +
-    '`fee_breakdown` retrieves the per-release breakdown of an artificial-streaming fee for one billing period — `period` (required) is YYYY-MM. ' +
+    'Artificial-streaming (streaming-integrity) reads. Pick ONE `view`: ' +
+    '`flags` — Stream Radar early-warning flags, paginated (`filters`: status, severity, dsp, isrc, release_id, detected_from/detected_to). Stream Radar is an optional add-on; without it the API returns a 403, surfaced verbatim. ' +
+    '`flag_detail` — one flag by `flag_id`. ' +
+    '`records` — reported artificial-streaming records, cursor-paginated; the detail behind any artificial-streaming fee (`filters`: dsp, start_date/end_date, release_id, isrc). ' +
+    '`fee_breakdown` — per-release fee breakdown for one `period` (YYYY-MM). ' +
     "response_format:'detailed' returns the verbatim API response.",
   inputShape: {
     view: z
@@ -147,4 +203,8 @@ const queryArtificialStreaming: ToolDef = {
   },
 };
 
-export const insightsTools: ToolDef[] = [getAnalytics, queryArtificialStreaming];
+export const insightsTools: ToolDef[] = [
+  getAnalytics,
+  getAnalyticsAvailability,
+  queryArtificialStreaming,
+];

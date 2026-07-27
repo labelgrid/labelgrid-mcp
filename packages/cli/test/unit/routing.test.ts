@@ -235,8 +235,19 @@ describe('analytics', () => {
   });
 
   it('get without --start is a usage error (exit 2)', async () => {
-    const r = await run(['analytics', 'get', '--end', '2026-06-30']);
+    const r = await run(['analytics', 'get', '--end', '2026-06-30', '--metrics', 'streams']);
     expect(r.code).toBe(2);
+  });
+
+  it('get without --metrics is a usage error (exit 2)', async () => {
+    const r = await run(['analytics', 'get', '--start', '2026-06-01', '--end', '2026-06-30']);
+    expect(r.code).toBe(2);
+  });
+
+  it('availability routes to GET /analytics/availability', async () => {
+    const r = await run(['analytics', 'availability']);
+    expect(r.code).toBe(0);
+    expect(r.calls).toEqual([{ method: 'get', args: ['/analytics/availability', undefined] }]);
   });
 });
 

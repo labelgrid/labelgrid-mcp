@@ -172,10 +172,11 @@ labelgrid royalties breakdown --group-by release,dsp --filter start_date=2026-01
 
 ### `analytics` — streaming analytics
 
-`get --start <date> --end <date>` (max 30-day window), optionally `--metrics`, `--platform`, `--release-id`, `--isrc`, `--upc`.
+`get --start <date> --end <date> --metrics <list>` (max 400-day window; 1-12 section keys per request), optionally `--platform`, `--release-id`, `--isrc`, `--upc`. `availability` prints the section-by-platform availability matrix and each platform's reporting cadence (daily or weekly).
 
 ```bash
 labelgrid analytics get --start 2026-06-01 --end 2026-06-28 --metrics streams,listeners
+labelgrid analytics availability
 ```
 
 ### `webhook` — webhook subscriptions

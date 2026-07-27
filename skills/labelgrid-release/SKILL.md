@@ -214,9 +214,13 @@ fresh submission.
 
 ### Analytics and royalties after release
 
-- MCP: `get_analytics` with `start_date` and `end_date` (both `YYYY-MM-DD`, window capped
-  at 30 days); optionally narrow by `platform` (`SPOTIFY`, `ITUNES`, `APPLE_MUSIC`),
-  `release_id`, `isrc`, `upc`, or `artist_names`.
+- MCP: `get_analytics` with `start_date`, `end_date` (both `YYYY-MM-DD`, window capped
+  at 400 days) and `metrics` (required, 1-12 section keys per request); optionally narrow
+  by `platform` (e.g. `SPOTIFY`, `APPLE_MUSIC`, `DEEZER`, `AUDIOMACK`, `KUGOU`),
+  `release_id`, `isrc`, `upc`, or `artist_names`. Call `get_analytics_availability`
+  first to see which sections each platform reports and each platform's reporting
+  cadence (KUGOU, KUWO and QQMUSIC report one point per week — do not average it
+  across days).
 - MCP: `query_financials` with `view:` `statements`, `statement_detail`, `transactions`,
   or `royalty_breakdown` (for `royalty_breakdown`, `group_by` is required — an ordered
   subset of `track,dsp,release,territory,period`).

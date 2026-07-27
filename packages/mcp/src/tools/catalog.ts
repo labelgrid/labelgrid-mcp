@@ -35,7 +35,7 @@ const responseFormat = z
   .enum(['concise', 'detailed'])
   .optional()
   .describe(
-    "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
+    "'concise' (default) keeps high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
   );
 
 /** A permissive body of API fields, forwarded verbatim to the endpoint. */
@@ -50,7 +50,7 @@ const idempotencyKey = z
   .max(128)
   .optional()
   .describe(
-    'Honored for release and track only: the server deduplicates by this key for 24h — reuse the SAME key when retrying an unobserved call. Ignored for other entities.',
+    'Release and track only (ignored for other entities): the server deduplicates by this key for 24h — reuse the SAME key when retrying an unobserved call.',
   );
 
 /** Rejects a path that is not an existing regular file, before any HTTP call. */
@@ -75,15 +75,12 @@ const searchCatalog: ToolDef = {
   toolset: 'catalog',
   gate: 'read',
   title: 'Search the catalog',
-  description: `List catalog entities of one kind, paginated. Pick the kind with \`entity\`: label, artist, writer, publisher, release, or track. \`filters\` takes the endpoint’s own filter names, passed through verbatim — ${entityDoc(
+  description: `List catalog entities of one kind, paginated. \`filters\` takes the endpoint’s own filter names, passed through verbatim — ${entityDoc(
     (s) => s.filtersDoc,
-  )} Use get_catalog_item for one entity's full detail. response_format:'detailed' returns the verbatim API response.`,
+  )} Use get_catalog_item for full detail.`,
   inputShape: {
     entity: entityArg,
-    filters: z
-      .record(z.string(), z.unknown())
-      .optional()
-      .describe('Filter names → values, passed through verbatim.'),
+    filters: z.record(z.string(), z.unknown()).optional().describe('Filter names → values.'),
     page: z.number().int().positive().optional().describe('1-based page number.'),
     per_page: z.number().int().positive().optional().describe('Items per page.'),
     response_format: responseFormat,
@@ -106,8 +103,7 @@ const getCatalogItem: ToolDef = {
   gate: 'read',
   title: 'Get a catalog item',
   description:
-    'Retrieve one catalog entity by id, with its full detail — a label’s settings, an artist’s identifiers and links, a writer’s PRO/IPI, a release’s metadata and track listing, a track’s contributors and royalty splits. ' +
-    "Pick the kind with `entity`: label, artist, writer, publisher, release, or track. response_format:'detailed' returns the verbatim API response.",
+    'Retrieve one catalog entity by id, with full detail (e.g. a release’s metadata and track listing, a track’s contributors and royalty splits, a writer’s PRO/IPI).',
   inputShape: {
     entity: entityArg,
     id: idArg,
@@ -126,9 +122,9 @@ const createCatalogItem: ToolDef = {
   toolset: 'catalog',
   gate: 'safe_write',
   title: 'Create a catalog item',
-  description: `Create a catalog entity. Pick the kind with \`entity\` and pass its attributes in \`fields\` — the API owns all validation. Required and common fields per entity: ${entityDoc(
+  description: `Create a catalog entity: pass its attributes in \`fields\` — the API owns all validation. Required and common fields per entity: ${entityDoc(
     (s) => s.fieldsDoc,
-  )} A release is created in DRAFT state — add tracks, then run the release checks before distributing. \`idempotency_key\` is honored for release and track only.`,
+  )} A release is created in DRAFT state — add tracks, then run the release checks before distributing.`,
   inputShape: {
     entity: entityArg,
     fields: fieldsBody('The entity attributes, forwarded verbatim.'),
@@ -156,8 +152,8 @@ const updateCatalogItem: ToolDef = {
   gate: 'safe_write',
   title: 'Update a catalog item',
   description:
-    'Update a catalog entity. Pick the kind with `entity`, supply only the fields you want to change in `fields` (same field sets as create_catalog_item). ' +
-    'For releases: once submitted or distributed, some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change. Track fields lock the same way once the parent release is submitted or distributed.',
+    'Update a catalog entity: supply only the fields to change in `fields` (same field sets as create_catalog_item). ' +
+    'Once a release is submitted or distributed, some release and track fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change.',
   inputShape: {
     entity: entityArg,
     id: idArg,
@@ -175,7 +171,7 @@ const deleteCatalogItem: ToolDef = {
   toolset: 'catalog',
   gate: 'safe_write',
   title: 'Delete a catalog item',
-  description: `Delete a catalog entity by id. The API refuses deletes that would orphan data — ${entityDoc(
+  description: `Delete a catalog entity. The API refuses deletes that would orphan data — ${entityDoc(
     (s) => s.deleteNote,
   )}`,
   inputShape: { entity: entityArg, id: idArg },
@@ -199,13 +195,13 @@ const uploadImage: ToolDef = {
   gate: 'safe_write',
   title: 'Upload a catalog image',
   description:
-    'Upload a label image or an artist photo from a local file. `target`: label_logo, label_logo_dark (a dark-mode variant), label_background, or artist_photo. `id` is the label id for label_* and the artist id for artist_photo. `file_path` must be a local image file.',
+    'Upload a label image (logo, dark-mode logo, or background) or an artist photo from a local image file, per `target`.',
   inputShape: {
     target: z
       .enum(['label_logo', 'label_logo_dark', 'label_background', 'artist_photo'])
       .describe('Which image asset to upload.'),
     id: z.number().int().positive().describe('The label id (label_*) or artist id (artist_photo).'),
-    file_path: z.string().describe('Local path to the image file to upload.'),
+    file_path: z.string().describe('Local path to the image file.'),
   },
   annotations: {},
   handler: async (args, { client }): Promise<ApiResult<unknown>> => {
@@ -247,11 +243,11 @@ const getAsset: ToolDef = {
   gate: 'read',
   title: 'Get an asset',
   description:
-    'Read a track or release asset. Valid selector matrices: ' +
-    "(1) mode='info', parent='track', asset stereo|dolby|lyrics — file metadata (not the bytes) incl. processing state. " +
-    "(2) mode='info', parent='release', asset square|tall — animated cover (motion artwork) video metadata incl. processing state. " +
-    "(3) mode='download_url', parent='track', asset audio_16|audio_24|audio_32 (WAV master at that bit depth) or audio_preview_full|audio_preview_clip (generated MP3 preview) — returns { download_url, expires_in }: a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. " +
-    'Any other combination has no endpoint and returns a structured error. mode defaults to info.',
+    'Read a track or release asset. Valid combinations: ' +
+    "(1) mode='info' + parent='track' + asset stereo|dolby|lyrics — file metadata (not the bytes) incl. processing state. " +
+    "(2) mode='info' + parent='release' + asset square|tall — motion-artwork (animated cover) video metadata. " +
+    "(3) mode='download_url' + parent='track' + asset audio_16|audio_24|audio_32 (WAV master) or audio_preview_full|audio_preview_clip (MP3 preview) — returns { download_url, expires_in }, a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. " +
+    'Any other combination returns a structured error.',
   inputShape: {
     parent: z.enum(['track', 'release']).describe('Whose asset.'),
     id: z.number().int().positive().describe('The track id or release id, per `parent`.'),

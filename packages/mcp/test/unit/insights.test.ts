@@ -36,9 +36,10 @@ function lastInit(fetchFn: ReturnType<typeof vi.fn>): RequestInit {
 }
 
 describe('insights toolset shape', () => {
-  it('exports the two read-only insights tools', () => {
+  it('exports the three read-only insights tools', () => {
     expect(insightsTools.map((t) => t.name)).toEqual([
       'get_analytics',
+      'get_analytics_availability',
       'query_artificial_streaming',
     ]);
     for (const t of insightsTools) {
@@ -50,13 +51,68 @@ describe('insights toolset shape', () => {
 });
 
 describe('get_analytics', () => {
-  it('requires start_date and end_date via zod', () => {
+  it('requires start_date, end_date and metrics via zod', () => {
     const schema = z.object(byName('get_analytics').inputShape);
     expect(schema.safeParse({}).success).toBe(false);
     expect(schema.safeParse({ start_date: '2026-01-01' }).success).toBe(false);
+    // metrics[] is required by the server (1..12 keys) — omitting it must fail.
     expect(schema.safeParse({ start_date: '2026-01-01', end_date: '2026-01-31' }).success).toBe(
-      true,
+      false,
     );
+    expect(
+      schema.safeParse({ start_date: '2026-01-01', end_date: '2026-01-31', metrics: ['streams'] })
+        .success,
+    ).toBe(true);
+  });
+
+  it('bounds metrics to 1..12 keys via zod', () => {
+    const schema = z.object(byName('get_analytics').inputShape);
+    const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
+    expect(schema.safeParse({ ...base, metrics: [] }).success).toBe(false);
+    const thirteen = [
+      'streams',
+      'listeners',
+      'saves',
+      'skips',
+      'shares',
+      'completion-rate',
+      'lyrics-view-rate',
+      'canvas-view-rate',
+      'device-split',
+      'source-split',
+      'saves-by-tier',
+      'streams-by-country',
+      'streams-by-gender',
+    ];
+    expect(thirteen).toHaveLength(13);
+    expect(schema.safeParse({ ...base, metrics: thirteen }).success).toBe(false);
+    expect(schema.safeParse({ ...base, metrics: thirteen.slice(0, 12) }).success).toBe(true);
+  });
+
+  it('accepts the expanded section keys and platforms', () => {
+    const schema = z.object(byName('get_analytics').inputShape);
+    const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
+    for (const metric of [
+      'library-adds',
+      'shazams',
+      'playlist-adds',
+      'source-split-detailed',
+      'discovery-rate',
+      'repeat-rate',
+      'listener-plan-mix',
+      'listeners-by-region',
+      'apple-streams-by-city',
+      'apple-discovery-cohorts',
+      'avg-listen-time',
+      'hour-of-day',
+      'shazams-by-city',
+      'shazams-by-state',
+    ]) {
+      expect(schema.safeParse({ ...base, metrics: [metric] }).success).toBe(true);
+    }
+    for (const platform of ['DEEZER', 'BOOMPLAY', 'AWA', 'AUDIOMACK', 'KUGOU', 'KUWO', 'QQMUSIC']) {
+      expect(schema.safeParse({ ...base, metrics: ['streams'], platform }).success).toBe(true);
+    }
   });
 
   it('→ GET /analytics/summary with the window and filters under filter[...]', async () => {
@@ -65,6 +121,7 @@ describe('get_analytics', () => {
       {
         start_date: '2026-01-01',
         end_date: '2026-01-31',
+        metrics: ['streams'],
         platform: 'SPOTIFY',
         isrc: 'USRC17607839',
         artist_names: ['Maya'],
@@ -96,13 +153,41 @@ describe('get_analytics', () => {
     const schema = z.object(byName('get_analytics').inputShape);
     const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
     expect(schema.safeParse({ ...base, metrics: ['downloads'] }).success).toBe(false);
-    expect(schema.safeParse({ ...base, platform: 'TIDAL' }).success).toBe(false);
+    // Valid metrics included so the failure isolates the platform enum — without
+    // them the parse fails on the missing required field and TIDAL is never tested.
+    expect(schema.safeParse({ ...base, metrics: ['streams'], platform: 'TIDAL' }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ ...base, metrics: ['streams'], platform: 'KUGOU' }).success).toBe(
+      true,
+    );
   });
 
-  it('carries the 30-day window and rate-limit caveats in the description', () => {
+  it('carries the 400-day window, over-90-day pacing and rate-limit caveats in the description', () => {
     const desc = byName('get_analytics').description;
-    expect(desc).toContain('30 days');
+    expect(desc).toContain('400 days');
+    expect(desc).toContain('90 days');
     expect(desc).toContain('429');
+    expect(desc).not.toContain('30 days');
+  });
+});
+
+describe('get_analytics_availability', () => {
+  it('→ GET /analytics/availability with no parameters', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_analytics_availability').handler({}, ctx);
+    expect(lastInit(fetchFn).method).toBe('GET');
+    expect(lastUrl(fetchFn)).toContain('/analytics/availability');
+  });
+
+  it('takes no inputs', () => {
+    expect(Object.keys(byName('get_analytics_availability').inputShape)).toEqual([]);
+  });
+
+  it('names the cadence map and the availability matrix in the description', () => {
+    const desc = byName('get_analytics_availability').description;
+    expect(desc).toContain('platform_cadence');
+    expect(desc).toContain('availability');
   });
 });
 

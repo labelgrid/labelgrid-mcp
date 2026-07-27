@@ -30,6 +30,7 @@ export const COVERAGE: Record<string, string> = {
   'GET /territories': 'list_reference_data',
   // insights
   'GET /analytics/summary': 'get_analytics',
+  'GET /analytics/availability': 'get_analytics_availability',
   // catalog reads
   'GET /labels': 'search_catalog',
   'GET /labels/{label}': 'get_catalog_item',
@@ -150,5 +151,6 @@ export const EXCLUDED: Record<string, string> = {
 
 export const PENDING_DOCS: Record<string, string> = {
   'GET /account': 'get_account',
+  'GET /analytics/availability': 'get_analytics_availability',
   'GET /tracks/{track}/files/{assetType}/download-url': 'get_asset',
 };

@@ -46,7 +46,7 @@ const idempotencyKey = z
   .max(128)
   .optional()
   .describe(
-    'The server deduplicates by this key for 24h — reuse the SAME key when retrying a call whose outcome you did not observe.',
+    'Deduplicated by the server for 24h — reuse the SAME key when retrying a call whose outcome you did not observe.',
   );
 
 /** Optional license metadata shared by the license upload/update actions. */
@@ -83,10 +83,10 @@ const uploadAsset: ToolDef = {
   title: 'Upload a release/track asset',
   description:
     'Upload a finalized track or release asset from a local file. `id` is the track id for track_* targets, the release id for release_*. ' +
-    '`track_stereo` (stereo audio, WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos, WAV) and `track_lyrics` (LRC) upload directly to storage and process asynchronously — check state with get_asset (mode info). ' +
-    "`release_cover_art` uploads or replaces the release's static cover art image. " +
-    '`release_motion_square` / `release_motion_tall` upload the animated cover (motion artwork) video — square or tall/portrait — also processed asynchronously. ' +
-    'ALL of these become immutable once the release is distributed — upload the final files before distributing.',
+    '`track_stereo` (WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
+    '`release_cover_art` uploads or replaces the static cover art image. ' +
+    '`release_motion_square` / `release_motion_tall` upload the square or tall animated cover (motion artwork) video, also asynchronous. ' +
+    'All assets become immutable once the release is distributed — upload final files first.',
   inputShape: {
     target: z
       .enum([
@@ -137,7 +137,7 @@ const deleteAsset: ToolDef = {
   gate: 'full_write',
   title: 'Delete a release/track asset',
   description:
-    'Delete a track or release asset file. track_stereo|track_dolby|track_lyrics delete a track asset; release_motion_square|release_motion_tall delete an animated cover (motion artwork) video. Allowed only while the parent release is still an editable draft; the API refuses once the release is locked or distributed. Cover art has no delete endpoint and cannot be deleted here.',
+    'Delete a track asset (track_*) or an animated cover / motion artwork video (release_motion_*). Allowed only while the parent release is an editable draft; refused once locked or distributed. Cover art cannot be deleted.',
   inputShape: {
     target: z
       .enum([
@@ -170,11 +170,11 @@ const manageTrackLicense: ToolDef = {
   gate: 'full_write',
   title: 'Manage a track license',
   description:
-    'Manage the license documents attached to a track (for a cover or a cleared sample). Pick ONE action with `action`: ' +
-    "`upload` attaches a new license — `file_path` required, `type` ('cover' or 'sample') selects the kind; optionally record license_id, license_provider, license_provider_name, original_track_link. " +
-    '`update` replaces the file and/or metadata of an existing license — `track_license_id` (from list_track_licenses) and `file_path` required. ' +
-    '`delete` permanently deletes a license and its file — `track_license_id` required; cannot be undone. ' +
-    'Licenses are immutability-governed once the release is live.',
+    'Manage license documents on a track (cover or cleared sample). ' +
+    '`upload` attaches a new license — `file_path` required, `type` selects cover/sample; optional metadata fields. ' +
+    '`update` replaces the file and/or metadata — `track_license_id` (from list_track_licenses) and `file_path` required. ' +
+    '`delete` permanently removes a license and its file — `track_license_id` required; cannot be undone. ' +
+    'Immutability-governed once the release is live.',
   inputShape: {
     action: z.enum(['upload', 'update', 'delete']).describe('Which license action.'),
     track_id: z.number().int().positive().describe('The track id.'),
@@ -231,7 +231,7 @@ const distributeRelease: ToolDef = {
   gate: 'full_write',
   title: 'Distribute a release',
   description:
-    'Submit a release for distribution to the stores/outlets — the FINAL, consequential action that sends the release out; run_release_checks (check validate) should pass first. The server enforces your account’s weekly submission limit and returns a structured error if exceeded. Pass idempotency_key and reuse the SAME value when retrying an unobserved call; without a key each call is a new submission.',
+    'Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission.',
   inputShape: { release_id: releaseId, idempotency_key: idempotencyKey },
   annotations: { destructiveHint: true },
   handler: (args, { client }) =>
@@ -247,7 +247,7 @@ const takedownRelease: ToolDef = {
   gate: 'full_write',
   title: 'Take down a release',
   description:
-    'Take a release down from ALL outlets/stores — a final, consequential action that removes it everywhere it was delivered. Re-distribution afterward is a fresh submission.',
+    'Take a release down from ALL outlets/stores — a final action that removes it everywhere it was delivered. Re-distribution is a fresh submission.',
   inputShape: { release_id: releaseId },
   annotations: { destructiveHint: true },
   handler: (args, { client }) => client.post(`/releases/${args.release_id}/takedown-all`),
@@ -259,7 +259,7 @@ const confirmReview: ToolDef = {
   gate: 'full_write',
   title: 'Confirm a held release into review',
   description:
-    'Confirm a release that Preflight QC placed on hold, moving it into distribution review. Use after you have reviewed the quality report and accept the release as-is. Safe to repeat.',
+    'Confirm a release Preflight QC placed on hold, moving it into distribution review, after reviewing the quality report and accepting the release as-is. Safe to repeat.',
   inputShape: { release_id: releaseId },
   annotations: { destructiveHint: true, idempotentHint: true },
   handler: (args, { client }) => client.post(`/releases/${args.release_id}/confirm-review`),
@@ -271,7 +271,7 @@ const enableBeatport: ToolDef = {
   gate: 'full_write',
   title: 'Request Beatport onboarding for a label',
   description:
-    'Request Beatport onboarding for a label. A one-time action that cannot be un-requested, so confirm the label is correct first.',
+    'Request Beatport onboarding for a label. One-time and cannot be un-requested — confirm the label is correct first.',
   inputShape: { label_id: z.number().int().positive().describe('The label id.') },
   annotations: { destructiveHint: true },
   handler: (args, { client }) => client.post(`/labels/${args.label_id}/enable-beatport`),

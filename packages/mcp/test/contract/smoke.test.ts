@@ -91,7 +91,7 @@ describe.skipIf(!TOKEN || !BASE_URL)('sandbox smoke', () => {
     const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
     const iso = (d: Date) => d.toISOString().slice(0, 10);
     const r = await tool(insightsTools, 'get_analytics').handler(
-      { start_date: iso(start), end_date: iso(end) },
+      { start_date: iso(start), end_date: iso(end), metrics: ['streams'] },
       context(),
     );
     // A 200 envelope (possibly empty) — not an auth/validation error.
