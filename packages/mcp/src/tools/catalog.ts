@@ -35,7 +35,7 @@ const responseFormat = z
   .enum(['concise', 'detailed'])
   .optional()
   .describe(
-    "'concise' (default) keeps high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
+    "'concise' (default) keeps high-signal fields and ids; 'detailed' is the verbatim response.",
   );
 
 /** A permissive body of API fields, forwarded verbatim to the endpoint. */
@@ -247,7 +247,7 @@ const getAsset: ToolDef = {
     "(1) mode='info' + parent='track' + asset stereo|dolby|lyrics — file metadata (not the bytes) incl. processing state. " +
     "(2) mode='info' + parent='release' + asset square|tall — motion-artwork (animated cover) video metadata. " +
     "(3) mode='download_url' + parent='track' + asset audio_16|audio_24|audio_32 (WAV master) or audio_preview_full|audio_preview_clip (MP3 preview) — returns { download_url, expires_in }, a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. " +
-    'Any other combination returns a structured error.',
+    'Any other combination is refused.',
   inputShape: {
     parent: z.enum(['track', 'release']).describe('Whose asset.'),
     id: z.number().int().positive().describe('The track id or release id, per `parent`.'),
@@ -264,7 +264,7 @@ const getAsset: ToolDef = {
         'audio_preview_full',
         'audio_preview_clip',
       ])
-      .describe('Which asset — see the description for the valid parent/mode pairings.'),
+      .describe('Which asset — see the valid combinations above.'),
     mode: z
       .enum(['info', 'download_url'])
       .optional()

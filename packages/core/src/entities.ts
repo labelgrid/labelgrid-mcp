@@ -7,7 +7,9 @@
  * This is data, not behavior — the catalog tools stay thin wrappers and the
  * API owns all validation. The wording here carries the caveats from the
  * per-entity tool descriptions it replaces (recording_country on track create,
- * RELEASE_LOCKED_FIELDS on release update, the delete refusals).
+ * the delete refusals). Caveats that belong to ONE tool stay in that tool's own
+ * description — the RELEASE_LOCKED_FIELDS rule lives on update_catalog_item, so
+ * repeating it here would only pad every client's catalog.
  */
 
 export type EntityName = 'label' | 'artist' | 'writer' | 'publisher' | 'release' | 'track';
@@ -29,7 +31,7 @@ export type EntitySpec = {
 export const ENTITIES: Record<EntityName, EntitySpec> = {
   label: {
     path: '/labels',
-    filtersDoc: 'label: no documented filters — paginate with page/per_page.',
+    filtersDoc: 'label: no documented filters.',
     fieldsDoc:
       'label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base.',
     deleteNote:
@@ -37,38 +39,36 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
   },
   artist: {
     path: '/artists',
-    filtersDoc: 'artist: artist_name (filter by artist name).',
+    filtersDoc: 'artist: artist_name.',
     fieldsDoc:
       'artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs.',
     deleteNote: 'artist: refused while still referenced by releases or tracks.',
   },
   writer: {
     path: '/writers',
-    filtersDoc: 'writer: name (writer name), ipi (IPI number).',
+    filtersDoc: 'writer: name, ipi.',
     fieldsDoc:
       'writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi).',
     deleteNote: 'writer: refused while still referenced by tracks.',
   },
   publisher: {
     path: '/publishers',
-    filtersDoc: 'publisher: name (publisher name), ipi (IPI number).',
+    filtersDoc: 'publisher: name, ipi.',
     fieldsDoc: 'publisher — required: name; optional: ipi, pro, isni, controlled_publisher.',
     deleteNote: 'publisher: refused while still referenced by writers.',
   },
   release: {
     path: '/releases',
-    filtersDoc:
-      'release: label_id (owning label id), is_live (1 = live/distributed only), barcode_number (UPC/EAN), cat (catalog number).',
+    filtersDoc: 'release: label_id, is_live (1 = live only), barcode_number (UPC/EAN), cat.',
     fieldsDoc:
-      'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs). Once submitted or distributed some fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change.',
+      'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs).',
     deleteNote: 'release: only a never-submitted draft can be deleted.',
   },
   track: {
     path: '/tracks',
-    filtersDoc: 'track: release_id (one release’s tracks), isrc (filter by ISRC).',
+    filtersDoc: 'track: release_id, isrc.',
     fieldsDoc:
       'track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more.',
-    deleteNote:
-      'track: allowed while the parent release is an editable draft; refused once submitted or distributed.',
+    deleteNote: 'track: refused once the release is no longer an editable draft.',
   },
 };

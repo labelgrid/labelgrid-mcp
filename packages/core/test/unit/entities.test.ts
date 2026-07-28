@@ -36,8 +36,10 @@ describe('entity registry', () => {
     // Track create requires recording_country (ISO 3166-1 alpha-2).
     expect(ENTITIES.track.fieldsDoc).toContain('recording_country');
     expect(ENTITIES.track.fieldsDoc).toContain('ISO 3166-1 alpha-2');
-    // Release update surfaces RELEASE_LOCKED_FIELDS verbatim on locked fields.
-    expect(ENTITIES.release.fieldsDoc).toContain('RELEASE_LOCKED_FIELDS');
+    // The RELEASE_LOCKED_FIELDS caveat belongs to the UPDATE path, so it lives on
+    // update_catalog_item's own description — never duplicated into fieldsDoc,
+    // which is assembled into the create description every client holds.
+    expect(ENTITIES.release.fieldsDoc).not.toContain('RELEASE_LOCKED_FIELDS');
     // The documented list filters survive.
     expect(ENTITIES.release.filtersDoc).toContain('label_id');
     expect(ENTITIES.release.filtersDoc).toContain('is_live');

@@ -317,7 +317,7 @@ const queryFinancials: ToolDef = {
     'Query your financial data. Pick ONE view with `view`: ' +
     '`statements` lists your royalty statements, paginated — `filters`: label_id, release_id, isrc, upc, start_date/end_date; group_by="release" rolls totals up per release. ' +
     '`statement_detail` retrieves one statement by `invoice_number` (required). ' +
-    '`transactions` lists account transactions, paginated — same `filters`; sort with `sort`; group_by="release" rolls up per release. ' +
+    '`transactions` lists account transactions, paginated — same `filters` and `group_by`; sort with `sort`. ' +
     '`royalty_breakdown` returns a cursor-paginated royalty breakdown — `group_by` is REQUIRED for this view: a comma-separated, ordered subset of: track, dsp, release, territory, period (e.g. "release,dsp"); same `filters`; pass `cursor` to page. ' +
     "Use download_statement for statement line items (CSV) or the invoice PDF. response_format:'detailed' returns the verbatim API response.",
   inputShape: {
@@ -329,22 +329,20 @@ const queryFinancials: ToolDef = {
       .string()
       .optional()
       .describe(
-        'REQUIRED for royalty_breakdown (ordered subset: track, dsp, release, territory, period); "release" rolls statements/transactions up per release.',
+        'Required for royalty_breakdown; "release" rolls statements/transactions up per release.',
       ),
     sort: z.string().optional().describe('Sort expression (view transactions).'),
     filters: z
       .record(z.string(), z.unknown())
       .optional()
-      .describe('label_id, release_id, isrc, upc, start_date, end_date — passed through verbatim.'),
+      .describe('Filter names → values, passed through verbatim.'),
     cursor: z.string().optional().describe('Pagination cursor (view royalty_breakdown).'),
     page: z.number().int().positive().optional().describe('1-based page number.'),
     per_page: z.number().int().positive().optional().describe('Items per page.'),
     response_format: z
       .enum(['concise', 'detailed'])
       .optional()
-      .describe(
-        "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
-      ),
+      .describe("'concise' (default) or 'detailed'."),
   },
   annotations: { readOnlyHint: true },
   handler: async (args, { client }) => {
@@ -395,11 +393,9 @@ const downloadStatement: ToolDef = {
   gate: 'read',
   title: 'Download a statement file',
   description:
-    "Download statement files. `format: 'csv'` downloads statement line items — pass invoice_number for one statement, OR a start_date/end_date range to export across statements; with save_to_path (an absolute path whose parent directory exists) the CSV is written there and the byte count returned; otherwise it is returned inline, truncated at 100KB (truncated: true) — use save_to_path for large exports. `format: 'invoice_pdf'` downloads the invoice PDF — invoice_number and save_to_path are both REQUIRED (the PDF is binary). An existing file is never overwritten (returns FILE_EXISTS).",
+    "Download statement files. `format: 'csv'` downloads statement line items — pass invoice_number for one statement, OR a start_date/end_date range to export across statements; with save_to_path the CSV is written there and the byte count returned; otherwise it is returned inline, truncated at 100KB (truncated: true) — use save_to_path for large exports. `format: 'invoice_pdf'` downloads the invoice PDF — invoice_number and save_to_path are both REQUIRED (the PDF is binary). An existing file is never overwritten (returns FILE_EXISTS).",
   inputShape: {
-    format: z
-      .enum(['csv', 'invoice_pdf'])
-      .describe('Which file: csv (line items) or invoice_pdf (the invoice PDF).'),
+    format: z.enum(['csv', 'invoice_pdf']).describe('Which file.'),
     invoice_number: z
       .string()
       .optional()
@@ -409,9 +405,7 @@ const downloadStatement: ToolDef = {
     save_to_path: z
       .string()
       .optional()
-      .describe(
-        'Absolute path (existing parent dir) to write the file to. Optional for csv (otherwise returned inline); required for invoice_pdf.',
-      ),
+      .describe('Absolute path (its parent directory must exist) to write the file to.'),
   },
   annotations: { readOnlyHint: true },
   handler: async (args, { client, config }): Promise<ApiResult<unknown>> => {

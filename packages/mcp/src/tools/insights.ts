@@ -1,7 +1,8 @@
 /**
  * Insights toolset: the streaming analytics summary, the availability-discovery
- * endpoint, and the consolidated artificial-streaming query (early-warning
- * flags, reported records, and the fee breakdown). All read-only.
+ * endpoint, the top-N rankings (leaderboards and placements), and the
+ * consolidated artificial-streaming query (early-warning flags, reported
+ * records, and the fee breakdown). All read-only.
  */
 
 import type { ApiResult } from '@labelgrid/core';
@@ -104,27 +105,25 @@ const getAnalytics: ToolDef = {
     'Streaming analytics summary. Window capped at 400 days; `metrics` takes 1-12 section keys per request (split larger selections — responses are cached). ' +
     'KUGOU/KUWO/QQMUSIC report weekly: one point per week carrying the whole week — never average it per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
     'Call get_analytics_availability first for section-per-platform support. ' +
-    'The eight `social-*` / `soundcloud-engagement` sections cover social and UGC usage instead of streaming: their `platform` is a UGC platform, a use, a view and a play are different quantities that are never summed with each other or with streams, and `ugc_platform` narrows them. Projecting any of them adds `meta.social_availability`, which reports per section which UGC platforms report that signal — read it rather than the streaming availability matrix, which does not cover them. ' +
+    'The `social-*` / `soundcloud-engagement` sections cover social and UGC usage instead of streaming: their `platform` is a UGC platform, a use, a view and a play are different quantities that are never summed with each other or with streams, and `ugc_platform` narrows them. Selecting any adds `meta.social_availability` (per section, which UGC platforms report that signal) — the streaming availability matrix does not cover them. ' +
     'Rate-limited ~60/min; windows over 90 days draw a separate lower ~30/min budget — prefer shorter windows for polling. A 429 carries retry_after_seconds.',
   inputShape: {
-    start_date: z.string().describe('Start of the reporting window, YYYY-MM-DD.'),
-    end_date: z.string().describe('End of the reporting window, YYYY-MM-DD (max 400-day span).'),
+    start_date: z.string().describe('Window start, YYYY-MM-DD.'),
+    end_date: z.string().describe('Window end, YYYY-MM-DD.'),
     metrics: z
       .array(z.enum(METRICS))
       .min(1)
       .max(MAX_METRICS_PER_REQUEST)
-      .describe('Section keys to return, 1-12 per request.'),
+      .describe('Section keys, 1-12 per request.'),
     platform: z.enum(PLATFORMS).optional(),
     ugc_platform: z
       .enum(UGC_PLATFORMS)
       .optional()
-      .describe(
-        'Narrow the social and UGC sections to one UGC platform. Separate from `platform`.',
-      ),
+      .describe('Narrows the social/UGC sections only.'),
     release_id: z.number().int().positive().optional(),
     isrc: z.string().optional(),
     upc: z.string().optional(),
-    artist_names: z.array(z.string()).optional().describe('Filter to one or more artist names.'),
+    artist_names: z.array(z.string()).optional(),
     limit: z.number().int().positive().optional(),
   },
   annotations: { readOnlyHint: true },
@@ -158,6 +157,74 @@ const getAnalyticsAvailability: ToolDef = {
   handler: (_args, { client }) => client.get('/analytics/availability'),
 };
 
+/** The two ranking reads, and the entity kinds a leaderboard can rank. */
+const RANKING_VIEWS = ['leaderboards', 'placements'] as const;
+const LEADERBOARD_TYPES = ['artists', 'tracks', 'albums', 'all'] as const;
+
+/** Upper bound the ranking endpoints place on `limit`. */
+const MAX_RANKING_LIMIT = 50;
+
+const getAnalyticsRankings: ToolDef = {
+  name: 'get_analytics_rankings',
+  toolset: 'insights',
+  gate: 'read',
+  title: 'Get analytics rankings',
+  description:
+    'Top-N rankings for a window, ordered by summed streams. Pick ONE `view`: ' +
+    '`leaderboards` — your top artists, tracks or albums (`type` required; `all` returns all three in one request). ' +
+    '`placements` — the playlists and radio containers driving streams, summed across storefronts. ' +
+    'Same scope filters as get_analytics; `limit` 1-50 (default 10). Under a `platform` filter, an `availability` of `not_available_for_platform` means that platform reports no ranking and `data` is empty.',
+  inputShape: {
+    view: z.enum(RANKING_VIEWS).describe('Which ranking read.'),
+    start_date: z.string().describe('Window start, YYYY-MM-DD.'),
+    end_date: z.string().describe('Window end, YYYY-MM-DD.'),
+    type: z.enum(LEADERBOARD_TYPES).optional().describe('Required for view leaderboards.'),
+    platform: z.enum(PLATFORMS).optional(),
+    ugc_platform: z.enum(UGC_PLATFORMS).optional(),
+    release_id: z.number().int().positive().optional(),
+    isrc: z.string().optional(),
+    upc: z.string().optional(),
+    artist_names: z.array(z.string()).optional(),
+    label_id: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Narrow to one of your own labels; it can never widen scope.'),
+    limit: z.number().int().positive().max(MAX_RANKING_LIMIT).optional(),
+  },
+  annotations: { readOnlyHint: true },
+  handler: (args, { client }) => {
+    const leaderboards = args.view === 'leaderboards';
+    if (leaderboards && args.type === undefined) {
+      return Promise.resolve({
+        error: {
+          code: 'INVALID_SELECTOR',
+          message:
+            "view 'leaderboards' requires `type` — artists, tracks, albums, or all. `type` does not apply to view 'placements'.",
+          status: 0,
+        },
+      });
+    }
+    return client.get(leaderboards ? '/analytics/leaderboards' : '/analytics/placements', {
+      filter: {
+        start_date: args.start_date,
+        end_date: args.end_date,
+        platform: args.platform,
+        ugc_platform: args.ugc_platform,
+        release_id: args.release_id,
+        isrc: args.isrc,
+        upc: args.upc,
+        artist_names: args.artist_names,
+        label_id: args.label_id,
+      },
+      // `type` is a leaderboards-only parameter — never sent to placements.
+      type: leaderboards ? args.type : undefined,
+      limit: args.limit,
+    });
+  },
+};
+
 const queryArtificialStreaming: ToolDef = {
   name: 'query_artificial_streaming',
   toolset: 'insights',
@@ -186,9 +253,7 @@ const queryArtificialStreaming: ToolDef = {
     response_format: z
       .enum(['concise', 'detailed'])
       .optional()
-      .describe(
-        "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
-      ),
+      .describe("'concise' (default) or 'detailed'."),
   },
   annotations: { readOnlyHint: true },
   handler: async (args, { client }) => {
@@ -239,5 +304,6 @@ const queryArtificialStreaming: ToolDef = {
 export const insightsTools: ToolDef[] = [
   getAnalytics,
   getAnalyticsAvailability,
+  getAnalyticsRankings,
   queryArtificialStreaming,
 ];
