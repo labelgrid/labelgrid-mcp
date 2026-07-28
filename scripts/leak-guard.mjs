@@ -13,9 +13,11 @@
  * It prints a file:line report for each hit so it can be fixed before commit.
  *
  * Legitimate exceptions:
- *   - The generated API-document fixture is skipped (it is the upstream spec).
  *   - Any single line may carry an inline `leak-guard-allow: <term>` pragma to
  *     whitelist a specific, justified occurrence on that line.
+ *
+ * No file is exempt by path. A blanket path exemption is how the one file most
+ * likely to carry verbatim external text escapes the scan entirely.
  *
  * Run: `node scripts/leak-guard.mjs [root]`
  */
@@ -41,9 +43,12 @@ export const BANNED = [
   { name: 'developer-path', re: /\/Users\/[a-z]+\// },
 ];
 
-// Directory/file paths (relative to root, posix-style) never scanned.
+// Build outputs and dependency trees (relative to root, posix-style) — not
+// authored content, so never scanned.
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'tmp']);
-const SKIP_FILES = new Set(['packages/mcp/test/fixtures/openapi.json']);
+// Deliberately EMPTY: no committed file is exempt from the scan. Justify a
+// specific occurrence with an inline `leak-guard-allow:` pragma instead.
+const SKIP_FILES = new Set();
 // Uncommitted local helpers (gitignored) — e.g. scripts/*.local.mjs — are
 // outside this guard's remit.
 const LOCAL_FILE_RE = /\.local\.[cm]?[jt]s$/;

@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 /**
- * One-shot helper: fetch the public OpenAPI document and write it to
- * packages/mcp/test/fixtures/openapi.json for use as the tool-schema reference
- * and by the API-coverage drift check.
+ * One-shot helper: fetch the public OpenAPI document to a LOCAL, gitignored
+ * path (tmp/openapi.json) for use as a tool-schema reference while working.
  *
- * The document is the public, customer-facing API spec. The base defaults to
- * production; override with LABELGRID_OPENAPI_URL for another environment.
+ * The document is NEVER vendored into this repository — `tmp/` and any
+ * `openapi.json` are gitignored, and the API-coverage drift check fetches the
+ * document at run time rather than reading a committed copy. Override the
+ * destination with OPENAPI_OUT and the source with LABELGRID_OPENAPI_URL; keep
+ * any destination you choose outside version control.
+ *
  * Run: `node scripts/fetch-openapi.mjs`
  */
 
@@ -15,9 +18,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const url = process.env.LABELGRID_OPENAPI_URL ?? 'https://api.labelgrid.com/docs/api.json';
-const out = resolve(
-  process.env.OPENAPI_OUT ?? resolve(repoRoot, 'packages/mcp/test/fixtures/openapi.json'),
-);
+const out = resolve(process.env.OPENAPI_OUT ?? resolve(repoRoot, 'tmp/openapi.json'));
 
 const res = await fetch(url, { headers: { Accept: 'application/json' } });
 if (!res.ok) {

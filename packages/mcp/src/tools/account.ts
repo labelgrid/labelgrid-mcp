@@ -1,4 +1,7 @@
-/** Account toolset: read the authenticated account, revoke API tokens. */
+/**
+ * Account toolset: read the authenticated account, read its rate budget, revoke
+ * API tokens.
+ */
 
 import { z } from 'zod';
 import type { ToolDef } from './types.js';
@@ -19,6 +22,19 @@ const getAccount: ToolDef = {
   handler: (args, { client }) => client.get(args.view === 'balance' ? '/account' : '/me'),
 };
 
+const getRateLimit: ToolDef = {
+  name: 'get_rate_limit',
+  toolset: 'account',
+  gate: 'read',
+  title: 'Get the rate budget',
+  description:
+    'The account’s API rate budget per category (read, write, export, analytics): ceiling, remaining, and window reset. ' +
+    'Every token on the account shares one budget; a null ceiling means none applies. Free to call — use it to pace requests and to recover from a 429.',
+  inputShape: {},
+  annotations: { readOnlyHint: true },
+  handler: (_args, { client }) => client.get('/rate-limit'),
+};
+
 const revokeApiToken: ToolDef = {
   name: 'revoke_api_token',
   toolset: 'account',
@@ -36,4 +52,4 @@ const revokeApiToken: ToolDef = {
   },
 };
 
-export const accountTools: ToolDef[] = [getAccount, revokeApiToken];
+export const accountTools: ToolDef[] = [getAccount, getRateLimit, revokeApiToken];

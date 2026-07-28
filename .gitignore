@@ -10,3 +10,6 @@ tmp/
 mcpb/build/
 mcpb/deps/
 labelgrid.mcpb
+# The API document is resolved at run time and must never be committed here.
+# No leading slash, so this matches at any depth.
+openapi.json

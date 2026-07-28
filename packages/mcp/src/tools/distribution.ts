@@ -56,8 +56,8 @@ const licenseMeta = {
     .enum(['licensing_agency', 'direct_from_publisher'])
     .optional()
     .describe('Where the license came from.'),
-  license_provider_name: z.string().optional().describe('The name of the license provider.'),
-  original_track_link: z.string().optional().describe('URL to the original/source track.'),
+  license_provider_name: z.string().optional(),
+  original_track_link: z.string().optional().describe('URL to the source track.'),
 } as const;
 
 /** Collects the defined license metadata fields into a string map for multipart. */
@@ -82,10 +82,10 @@ const uploadAsset: ToolDef = {
   gate: 'full_write',
   title: 'Upload a release/track asset',
   description:
-    'Upload a finalized track or release asset from a local file. `id` is the track id for track_* targets, the release id for release_*. ' +
+    'Upload a finalized track or release asset from a local file. ' +
     '`track_stereo` (WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
     '`release_cover_art` uploads or replaces the static cover art image. ' +
-    '`release_motion_square` / `release_motion_tall` upload the square or tall animated cover (motion artwork) video, also asynchronous. ' +
+    '`release_motion_square`/`release_motion_tall` upload the animated cover (motion artwork) video, also asynchronous. ' +
     'All assets become immutable once the release is distributed — upload final files first.',
   inputShape: {
     target: z
@@ -98,7 +98,7 @@ const uploadAsset: ToolDef = {
         'release_motion_tall',
       ])
       .describe('Which asset to upload.'),
-    id: z.number().int().positive().describe('The track id (track_*) or release id (release_*).'),
+    id: z.number().int().positive().describe('The track or release id, per `target`.'),
     file_path: z.string().describe('Local path to the file to upload.'),
   },
   annotations: {},
@@ -183,7 +183,7 @@ const manageTrackLicense: ToolDef = {
       .int()
       .positive()
       .optional()
-      .describe('From list_track_licenses. Required for update/delete.'),
+      .describe('Required for update/delete.'),
     file_path: z
       .string()
       .optional()

@@ -36,10 +36,11 @@ function lastInit(fetchFn: ReturnType<typeof vi.fn>): RequestInit {
 }
 
 describe('insights toolset shape', () => {
-  it('exports the three read-only insights tools', () => {
+  it('exports the four read-only insights tools', () => {
     expect(insightsTools.map((t) => t.name)).toEqual([
       'get_analytics',
       'get_analytics_availability',
+      'get_analytics_rankings',
       'query_artificial_streaming',
     ]);
     for (const t of insightsTools) {
@@ -252,6 +253,136 @@ describe('get_analytics_availability', () => {
     const desc = byName('get_analytics_availability').description;
     expect(desc).toContain('platform_cadence');
     expect(desc).toContain('availability');
+  });
+});
+
+describe('get_analytics_rankings', () => {
+  const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
+
+  it('requires view and the window via zod, and bounds limit to 50', () => {
+    const schema = z.object(byName('get_analytics_rankings').inputShape);
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ view: 'leaderboards' }).success).toBe(false);
+    expect(schema.safeParse({ ...base, view: 'placements' }).success).toBe(true);
+    expect(schema.safeParse({ ...base, view: 'top_tracks' }).success).toBe(false);
+    expect(schema.safeParse({ ...base, view: 'leaderboards', type: 'singles' }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ ...base, view: 'placements', limit: 50 }).success).toBe(true);
+    expect(schema.safeParse({ ...base, view: 'placements', limit: 51 }).success).toBe(false);
+  });
+
+  it('accepts every leaderboard type and shares the streaming/UGC platform axes', () => {
+    const schema = z.object(byName('get_analytics_rankings').inputShape);
+    for (const type of ['artists', 'tracks', 'albums', 'all']) {
+      expect(schema.safeParse({ ...base, view: 'leaderboards', type }).success).toBe(true);
+    }
+    expect(schema.safeParse({ ...base, view: 'placements', platform: 'KUGOU' }).success).toBe(true);
+    expect(schema.safeParse({ ...base, view: 'placements', platform: 'TIDAL' }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ ...base, view: 'placements', ugc_platform: 'tiktok' }).success).toBe(
+      true,
+    );
+    expect(schema.safeParse({ ...base, view: 'placements', ugc_platform: 'SPOTIFY' }).success).toBe(
+      false,
+    );
+  });
+
+  it('view=leaderboards → GET /analytics/leaderboards with the scope filters, type and limit', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_analytics_rankings').handler(
+      {
+        ...base,
+        view: 'leaderboards',
+        type: 'tracks',
+        platform: 'SPOTIFY',
+        release_id: 12,
+        isrc: 'USRC17607839',
+        upc: '0123456789012',
+        artist_names: ['Maya'],
+        label_id: 3508,
+        limit: 25,
+      },
+      ctx,
+    );
+    expect(lastInit(fetchFn).method).toBe('GET');
+    const url = lastUrl(fetchFn);
+    expect(url).toContain('/analytics/leaderboards');
+    expect(url).toContain('filter[start_date]=2026-01-01');
+    expect(url).toContain('filter[end_date]=2026-01-31');
+    expect(url).toContain('filter[platform]=SPOTIFY');
+    expect(url).toContain('filter[release_id]=12');
+    expect(url).toContain('filter[isrc]=USRC17607839');
+    expect(url).toContain('filter[upc]=0123456789012');
+    expect(url).toContain('filter[artist_names][]=Maya');
+    expect(url).toContain('filter[label_id]=3508');
+    expect(url).toContain('type=tracks');
+    expect(url).toContain('limit=25');
+  });
+
+  it('view=placements → GET /analytics/placements and never sends the leaderboards-only type', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_analytics_rankings').handler(
+      { ...base, view: 'placements', type: 'artists', ugc_platform: 'soundcloud' },
+      ctx,
+    );
+    const url = lastUrl(fetchFn);
+    expect(url).toContain('/analytics/placements');
+    expect(url).not.toContain('/analytics/leaderboards');
+    expect(url).toContain('filter[ugc_platform]=soundcloud');
+    expect(url).not.toContain('type=');
+  });
+
+  it('view=leaderboards without type → INVALID_SELECTOR naming type, no HTTP call', async () => {
+    const { fetchFn, ctx } = harness();
+    const r = await byName('get_analytics_rankings').handler(
+      { ...base, view: 'leaderboards' },
+      ctx,
+    );
+    expect('error' in r && r.error.code).toBe('INVALID_SELECTOR');
+    expect('error' in r && r.error.message).toContain('type');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('returns the ranking payload verbatim, availability sibling included', async () => {
+    const payload = { data: [{ name: 'Weekly Picks', streams: 900 }], availability: 'available' };
+    const { ctx } = harness(payload);
+    const r = await byName('get_analytics_rankings').handler({ ...base, view: 'placements' }, ctx);
+    expect('data' in r && r.data).toEqual(payload);
+  });
+
+  it('passes an API error through as a structured error', async () => {
+    const fetchFn = vi.fn(
+      async () => new Response('{"message":"No such release."}', { status: 404 }),
+    );
+    const client = new LabelGridClient({
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      fetchFn: fetchFn as unknown as typeof fetch,
+      version: 't',
+    });
+    const config: Config = {
+      baseUrl: 'https://api.example.test/api/public',
+      token: 'tok',
+      setupMode: false,
+      writes: true,
+      fullWrites: true,
+      toolsets: null,
+    };
+    const r = await byName('get_analytics_rankings').handler(
+      { ...base, view: 'leaderboards', type: 'all', release_id: 999999 },
+      { client, config } as ToolContext,
+    );
+    expect('error' in r && r.error.status).toBe(404);
+    expect('error' in r && r.error.message).toContain('No such release');
+  });
+
+  it('names both views and the availability signal in the description', () => {
+    const desc = byName('get_analytics_rankings').description;
+    expect(desc).toContain('leaderboards');
+    expect(desc).toContain('placements');
+    expect(desc).toContain('not_available_for_platform');
   });
 });
 

@@ -81,12 +81,12 @@ describe('buildServer registration', () => {
 });
 
 describe('buildServer default connected surface', () => {
-  it('exposes EXACTLY 22 tools by default (no webhooks, no full writes)', async () => {
+  it('exposes EXACTLY 24 tools by default (no webhooks, no full writes)', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, allTools());
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    expect(names).toHaveLength(22);
+    expect(names).toHaveLength(24);
     // Webhooks are default-off; full writes are unarmed.
     expect(names).not.toContain('list_webhooks');
     expect(names).not.toContain('manage_webhook');
@@ -111,7 +111,7 @@ describe('buildServer default connected surface', () => {
     expect(names).toEqual(['list_webhooks', 'manage_webhook']);
   });
 
-  it('exposes all 31 tools when every toolset is named and full writes are armed', async () => {
+  it('exposes all 33 tools when every toolset is named and full writes are armed', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
       config({
@@ -131,7 +131,7 @@ describe('buildServer default connected surface', () => {
       allTools(),
     );
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(31);
+    expect(tools).toHaveLength(33);
   });
 
   it('registers the nine reference resources', async () => {
@@ -257,7 +257,7 @@ describe('buildServer legal disclosure instructions', () => {
 describe('buildServer setup mode', () => {
   const setupCfg = () => config({ setupMode: true, token: null, writes: false });
 
-  it('lists the setup helper plus the 29-tool default catalog (webhooks excluded)', async () => {
+  it('lists the setup helper plus the 31-tool default catalog (webhooks excluded)', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
       setupCfg(),
@@ -269,14 +269,14 @@ describe('buildServer setup mode', () => {
     // The setup helper leads, and the catalog is visible to introspection
     // (write gates do not hide tools here — nothing can execute without a
     // token). The webhooks default-off exclusion applies to the listing too,
-    // so the advertised surface matches reality: 29 catalog tools + setup.
+    // so the advertised surface matches reality: 31 catalog tools + setup.
     expect(names).toContain('setup');
     expect(names).toContain('get_account');
     expect(names).toContain('create_catalog_item');
     expect(names).toContain('distribute_release');
     expect(names).not.toContain('list_webhooks');
     expect(names).not.toContain('manage_webhook');
-    expect(names).toHaveLength(30);
+    expect(names).toHaveLength(32);
   });
 
   it('lists the webhook pair in setup mode when webhooks is named explicitly', async () => {
