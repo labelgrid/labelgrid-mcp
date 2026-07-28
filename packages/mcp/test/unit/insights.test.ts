@@ -115,6 +115,70 @@ describe('get_analytics', () => {
     }
   });
 
+  it('accepts the social and UGC section keys', () => {
+    const schema = z.object(byName('get_analytics').inputShape);
+    const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
+    const social = [
+      'social-usage-over-time',
+      'social-reach-over-time',
+      'social-platform-mix',
+      'social-top-tracks',
+      'social-territory',
+      'social-artist-reach',
+      'social-artist-reach-daily',
+      'soundcloud-engagement',
+    ];
+    expect(social).toHaveLength(8);
+    for (const metric of social) {
+      expect(schema.safeParse({ ...base, metrics: [metric] }).success).toBe(true);
+    }
+    // The whole family fits one request, under the 12-key cap.
+    expect(schema.safeParse({ ...base, metrics: social }).success).toBe(true);
+  });
+
+  it('accepts every ugc_platform token and rejects a streaming platform in its place', () => {
+    const schema = z.object(byName('get_analytics').inputShape);
+    const base = {
+      start_date: '2026-01-01',
+      end_date: '2026-01-31',
+      metrics: ['social-territory'],
+    };
+    for (const ugc of [
+      'snapchat',
+      'instagram',
+      'facebook',
+      'soundcloud',
+      'tiktok',
+      'whatsapp',
+      'threads',
+      'messenger',
+    ]) {
+      expect(schema.safeParse({ ...base, ugc_platform: ugc }).success).toBe(true);
+    }
+    // The two axes are disjoint: a DSP token is not a UGC token, and vice versa.
+    expect(schema.safeParse({ ...base, ugc_platform: 'SPOTIFY' }).success).toBe(false);
+    expect(schema.safeParse({ ...base, platform: 'instagram' }).success).toBe(false);
+  });
+
+  it('serializes ugc_platform under filter[...] alongside the streaming filters', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_analytics').handler(
+      {
+        start_date: '2026-01-01',
+        end_date: '2026-01-31',
+        metrics: ['social-usage-over-time'],
+        ugc_platform: 'snapchat',
+      },
+      ctx,
+    );
+    const url = lastUrl(fetchFn);
+    expect(url).toContain('/analytics/summary');
+    expect(url).toContain('filter[ugc_platform]=snapchat');
+    expect(url).toContain('metrics[]=social-usage-over-time');
+    // ugc_platform must not leak onto the streaming platform axis.
+    expect(url).not.toContain('filter[platform]=');
+  });
+
   it('→ GET /analytics/summary with the window and filters under filter[...]', async () => {
     const { fetchFn, ctx } = harness();
     await byName('get_analytics').handler(

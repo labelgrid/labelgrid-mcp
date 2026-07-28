@@ -10,8 +10,9 @@ import { applyProjection } from '../projection.js';
 import type { ToolDef } from './types.js';
 
 /**
- * The 37 metric sections the summary endpoint can return, in the server's
- * canonical order.
+ * The 45 metric sections the summary endpoint can return, in the server's
+ * canonical order: the streaming sections first, then the social and UGC
+ * family.
  */
 const METRICS = [
   'streams',
@@ -51,6 +52,30 @@ const METRICS = [
   'hour-of-day',
   'shazams-by-city',
   'shazams-by-state',
+  'social-usage-over-time',
+  'social-reach-over-time',
+  'social-platform-mix',
+  'social-top-tracks',
+  'social-territory',
+  'social-artist-reach',
+  'social-artist-reach-daily',
+  'soundcloud-engagement',
+] as const;
+
+/**
+ * The UGC platform values `filter[ugc_platform]` accepts. A separate axis from
+ * `platform`: it narrows the social and UGC sections only, and its values never
+ * appear in a streaming total or platform share.
+ */
+const UGC_PLATFORMS = [
+  'snapchat',
+  'instagram',
+  'facebook',
+  'soundcloud',
+  'tiktok',
+  'whatsapp',
+  'threads',
+  'messenger',
 ] as const;
 
 /** The maximum number of section keys the server accepts per summary request. */
@@ -74,11 +99,12 @@ const getAnalytics: ToolDef = {
   name: 'get_analytics',
   toolset: 'insights',
   gate: 'read',
-  title: 'Get streaming analytics',
+  title: 'Get streaming and social analytics',
   description:
     'Streaming analytics summary. Window capped at 400 days; `metrics` takes 1-12 section keys per request (split larger selections — responses are cached). ' +
     'KUGOU/KUWO/QQMUSIC report weekly: one point per week carrying the whole week — never average it per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
     'Call get_analytics_availability first for section-per-platform support. ' +
+    'The eight `social-*` / `soundcloud-engagement` sections cover social and UGC usage instead of streaming: their `platform` is a UGC platform, a use, a view and a play are different quantities that are never summed with each other or with streams, and `ugc_platform` narrows them. Projecting any of them adds `meta.social_availability`, which reports per section which UGC platforms report that signal — read it rather than the streaming availability matrix, which does not cover them. ' +
     'Rate-limited ~60/min; windows over 90 days draw a separate lower ~30/min budget — prefer shorter windows for polling. A 429 carries retry_after_seconds.',
   inputShape: {
     start_date: z.string().describe('Start of the reporting window, YYYY-MM-DD.'),
@@ -89,6 +115,12 @@ const getAnalytics: ToolDef = {
       .max(MAX_METRICS_PER_REQUEST)
       .describe('Section keys to return, 1-12 per request.'),
     platform: z.enum(PLATFORMS).optional(),
+    ugc_platform: z
+      .enum(UGC_PLATFORMS)
+      .optional()
+      .describe(
+        'Narrow the social and UGC sections to one UGC platform. Separate from `platform`.',
+      ),
     release_id: z.number().int().positive().optional(),
     isrc: z.string().optional(),
     upc: z.string().optional(),
@@ -102,6 +134,7 @@ const getAnalytics: ToolDef = {
         start_date: args.start_date,
         end_date: args.end_date,
         platform: args.platform,
+        ugc_platform: args.ugc_platform,
         release_id: args.release_id,
         isrc: args.isrc,
         upc: args.upc,
