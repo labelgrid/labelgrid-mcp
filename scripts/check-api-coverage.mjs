@@ -2,20 +2,21 @@
 /**
  * API-coverage drift check.
  *
- * Compares the public API document (offline fixture by default, or a live URL)
- * against this server's coverage manifest (packages/mcp/src/coverage.ts →
- * packages/mcp/dist/coverage.js).
+ * Compares the public API document against this server's coverage manifest
+ * (packages/mcp/src/coverage.ts → packages/mcp/dist/coverage.js).
  * It fails when the API grows an endpoint we neither expose as a tool nor
  * explicitly exclude — the signal to ship a tool (or an exclusion) in the same
  * cycle. It also flags manifest entries that no longer exist in the API
  * (stale coverage or stale exclusions).
  *
- * Sources:
- *   - Offline (default, used in CI): reads packages/mcp/test/fixtures/openapi.json.
- *   - Live: set LABELGRID_OPENAPI_URL (defaults to the production API document
- *     when `--live` is passed) to fetch instead.
+ * The document is resolved at RUN TIME and is never vendored into this
+ * repository:
+ *   - Default (and in CI): fetched from the production API document.
+ *   - Override the URL with LABELGRID_OPENAPI_URL to check another environment.
+ *   - OPENAPI_FIXTURE=<path> reads a local copy instead, for offline work. Keep
+ *     any such copy OUT of the repository — `openapi.json` is gitignored.
  *
- * Run: `node scripts/check-api-coverage.mjs [--live]`
+ * Run: `node scripts/check-api-coverage.mjs`
  */
 
 import { readFileSync } from 'node:fs';
@@ -23,10 +24,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
-const DEFAULT_LIVE_URL = 'https://api.labelgrid.com/docs/api.json';
+const DEFAULT_URL = 'https://api.labelgrid.com/docs/api.json';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const FIXTURE =
-  process.env.OPENAPI_FIXTURE ?? resolve(REPO_ROOT, 'packages/mcp/test/fixtures/openapi.json');
 
 async function loadCoverage() {
   const distUrl = pathToFileURL(resolve(REPO_ROOT, 'packages/mcp/dist/coverage.js')).href;
@@ -41,17 +40,18 @@ async function loadCoverage() {
 }
 
 async function loadSpec() {
-  const live = process.argv.includes('--live') || process.env.LABELGRID_OPENAPI_URL;
-  if (live) {
-    const url = process.env.LABELGRID_OPENAPI_URL ?? DEFAULT_LIVE_URL;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) {
-      console.error(`check-api-coverage: fetch failed ${res.status} ${res.statusText} (${url})`);
-      process.exit(1);
-    }
-    return res.json();
+  const localCopy = process.env.OPENAPI_FIXTURE;
+  if (localCopy) {
+    console.error(`check-api-coverage: reading the local API document at ${localCopy}.`);
+    return JSON.parse(readFileSync(resolve(localCopy), 'utf8'));
   }
-  return JSON.parse(readFileSync(resolve(FIXTURE), 'utf8'));
+  const url = process.env.LABELGRID_OPENAPI_URL ?? DEFAULT_URL;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) {
+    console.error(`check-api-coverage: fetch failed ${res.status} ${res.statusText} (${url})`);
+    process.exit(1);
+  }
+  return res.json();
 }
 
 function specEntries(spec) {

@@ -27,7 +27,7 @@ jobs:
         run: npm test
       - name: Repository hygiene scan
         run: npm run leak-guard
-      - name: API coverage drift (offline fixture)
+      - name: API coverage drift (live API document)
         run: npm run check-coverage
       - name: README tool-table drift
         run: node scripts/gen-tool-docs.mjs --check
