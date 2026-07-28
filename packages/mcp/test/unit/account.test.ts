@@ -5,8 +5,11 @@ import type { Config } from '../../src/config.js';
 import { accountTools } from '../../src/tools/account.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
-function harness() {
-  const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
+function harness(
+  respond: () => Promise<Response> = async () =>
+    new Response(JSON.stringify({ ok: true }), { status: 200 }),
+) {
+  const fetchFn = vi.fn(respond);
   const client = new LabelGridClient({
     baseUrl: 'https://api.example.test/api/public',
     token: 'tok',
@@ -36,8 +39,12 @@ function lastMethod(fetchFn: ReturnType<typeof vi.fn>): string | undefined {
 }
 
 describe('account toolset shape', () => {
-  it('exports get_account and revoke_api_token in the account toolset', () => {
-    expect(accountTools.map((t) => t.name)).toEqual(['get_account', 'revoke_api_token']);
+  it('exports get_account, get_rate_limit and revoke_api_token in the account toolset', () => {
+    expect(accountTools.map((t) => t.name)).toEqual([
+      'get_account',
+      'get_rate_limit',
+      'revoke_api_token',
+    ]);
     for (const t of accountTools) expect(t.toolset).toBe('account');
   });
 
@@ -74,6 +81,54 @@ describe('get_account view routing', () => {
     expect(schema.safeParse({ view: 'summary' }).success).toBe(false);
     expect(schema.safeParse({ view: 'profile' }).success).toBe(true);
     expect(schema.safeParse({ view: 'balance' }).success).toBe(true);
+  });
+});
+
+describe('get_rate_limit', () => {
+  it('is a read-only read in the account toolset', () => {
+    const tool = byName('get_rate_limit');
+    expect(tool.toolset).toBe('account');
+    expect(tool.gate).toBe('read');
+    expect(tool.annotations.readOnlyHint).toBe(true);
+  });
+
+  it('takes no inputs', () => {
+    expect(Object.keys(byName('get_rate_limit').inputShape)).toEqual([]);
+  });
+
+  it('→ GET /rate-limit and returns the budget payload', async () => {
+    const payload = {
+      data: {
+        tier: 'standard',
+        limits: {
+          read: { limit: 60, remaining: 59, reset: '2026-07-28T12:00:00Z', window_seconds: 60 },
+          analytics: { limit: null, remaining: null, reset: null, window_seconds: null },
+        },
+      },
+    };
+    const { fetchFn, ctx } = harness(
+      async () => new Response(JSON.stringify(payload), { status: 200 }),
+    );
+    const r = await byName('get_rate_limit').handler({}, ctx);
+    expect(lastMethod(fetchFn)).toBe('GET');
+    expect(lastUrl(fetchFn)).toContain('/rate-limit');
+    // No projection on this tool — the budget is returned verbatim.
+    expect('data' in r && r.data).toEqual(payload);
+  });
+
+  it('passes an error response through as a structured error', async () => {
+    const { ctx } = harness(
+      async () => new Response('{"message":"Unauthenticated."}', { status: 401 }),
+    );
+    const r = await byName('get_rate_limit').handler({}, ctx);
+    expect('error' in r && r.error.status).toBe(401);
+    expect('error' in r && r.error.message).toContain('Unauthenticated');
+  });
+
+  it('names the per-category budget and the 429 recovery use in the description', () => {
+    const desc = byName('get_rate_limit').description;
+    expect(desc).toContain('429');
+    expect(desc).toContain('analytics');
   });
 });
 

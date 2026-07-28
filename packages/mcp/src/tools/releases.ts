@@ -18,7 +18,7 @@ const responseFormat = z
   .enum(['concise', 'detailed'])
   .optional()
   .describe(
-    "'concise' (default) keeps only the high-signal fields (ids always kept); 'detailed' returns the verbatim API response.",
+    "'concise' (default) keeps high-signal fields and ids; 'detailed' is the verbatim response.",
   );
 
 const getReleaseReview: ToolDef = {

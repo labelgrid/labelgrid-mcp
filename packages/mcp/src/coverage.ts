@@ -18,6 +18,7 @@
 export const COVERAGE: Record<string, string> = {
   // account
   'GET /me': 'get_account',
+  'GET /rate-limit': 'get_rate_limit',
   'DELETE /tokens/current': 'revoke_api_token',
   'DELETE /tokens/{tokenId}': 'revoke_api_token',
   // reference
@@ -31,6 +32,8 @@ export const COVERAGE: Record<string, string> = {
   // insights
   'GET /analytics/summary': 'get_analytics',
   'GET /analytics/availability': 'get_analytics_availability',
+  'GET /analytics/leaderboards': 'get_analytics_rankings',
+  'GET /analytics/placements': 'get_analytics_rankings',
   // catalog reads
   'GET /labels': 'search_catalog',
   'GET /labels/{label}': 'get_catalog_item',
