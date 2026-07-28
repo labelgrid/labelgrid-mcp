@@ -91,6 +91,73 @@ describe('projectConcise', () => {
     expect(projectConcise(42, ['title'])).toBe(42);
   });
 
+  it('keeps every payout fee field on a statements payload', () => {
+    const out = projectConcise(
+      {
+        data: [
+          {
+            id: 7,
+            invoice_number: 'INV202601',
+            gross_usd: 120,
+            labelgrid_fee: 18,
+            labelgrid_rate: 0.1,
+            labelgrid_ugc_rate: 0.3,
+            platform_fee_usd: 12,
+            ugc_fee_usd: 6,
+            memo_blob: 'drop me',
+          },
+        ],
+      },
+      CONCISE_ALLOWLISTS.query_financials,
+    ) as Record<string, unknown>;
+    expect(out.data).toEqual([
+      {
+        id: 7,
+        invoice_number: 'INV202601',
+        gross_usd: 120,
+        labelgrid_fee: 18,
+        labelgrid_rate: 0.1,
+        labelgrid_ugc_rate: 0.3,
+        platform_fee_usd: 12,
+        ugc_fee_usd: 6,
+      },
+    ]);
+  });
+
+  it('keeps the fee-breakdown nulls on a statement that predates the breakdown', () => {
+    const out = projectConcise(
+      {
+        data: [
+          {
+            id: 8,
+            invoice_number: 'INV202412',
+            gross_usd: 80,
+            labelgrid_fee: 8,
+            labelgrid_rate: 0.1,
+            labelgrid_ugc_rate: null,
+            platform_fee_usd: null,
+            ugc_fee_usd: null,
+            memo_blob: 'drop me',
+          },
+        ],
+      },
+      CONCISE_ALLOWLISTS.query_financials,
+    ) as Record<string, unknown>;
+    // The three breakdown fields survive as explicit nulls — the total stays authoritative.
+    expect(out.data).toEqual([
+      {
+        id: 8,
+        invoice_number: 'INV202412',
+        gross_usd: 80,
+        labelgrid_fee: 8,
+        labelgrid_rate: 0.1,
+        labelgrid_ugc_rate: null,
+        platform_fee_usd: null,
+        ugc_fee_usd: null,
+      },
+    ]);
+  });
+
   it('never transforms values — kept values are verbatim', () => {
     const out = projectConcise({ title: '  spaced  ', status: 0, isrc: 'US1234500001', id: 9 }, [
       'title',
@@ -161,6 +228,11 @@ describe('per-tool allowlists', () => {
       'status',
       'currency',
       'gross_usd',
+      'labelgrid_fee',
+      'platform_fee_usd',
+      'ugc_fee_usd',
+      'labelgrid_rate',
+      'labelgrid_ugc_rate',
       'net_usd',
       'amount',
       'total_due_usd',
