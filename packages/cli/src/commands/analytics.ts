@@ -22,7 +22,7 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
     .requiredOption('--metrics <list>', 'comma-separated section keys, 1-12 per request')
     .option(
       '--platform <name>',
-      'SPOTIFY, ITUNES, APPLE_MUSIC, DEEZER, BOOMPLAY, AWA, AUDIOMACK, KUGOU, KUWO or QQMUSIC',
+      'SPOTIFY, ITUNES, APPLE_MUSIC, DEEZER, BOOMPLAY, AWA, AUDIOMACK, AMAZON, KUGOU, KUWO or QQMUSIC',
     )
     .option('--release-id <id>', 'narrow to one release')
     .option('--isrc <isrc>', 'narrow to one ISRC')
