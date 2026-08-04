@@ -11,9 +11,9 @@ import { applyProjection } from '../projection.js';
 import type { ToolDef } from './types.js';
 
 /**
- * The 45 metric sections the summary endpoint can return, in the server's
+ * The 47 metric sections the summary endpoint can return, in the server's
  * canonical order: the streaming sections first, then the social and UGC
- * family.
+ * family, then the per-track daily series.
  */
 const METRICS = [
   'streams',
@@ -61,6 +61,8 @@ const METRICS = [
   'social-artist-reach',
   'social-artist-reach-daily',
   'soundcloud-engagement',
+  'track-streams-daily',
+  'track-listeners-daily',
 ] as const;
 
 /**
@@ -106,6 +108,7 @@ const getAnalytics: ToolDef = {
     'KUGOU/KUWO/QQMUSIC report weekly: one point per week carrying the whole week — never average it per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
     'Call get_analytics_availability first for section-per-platform support. ' +
     'The `social-*` / `soundcloud-engagement` sections cover social and UGC usage instead of streaming: their `platform` is a UGC platform, a use, a view and a play are different quantities that are never summed with each other or with streams, and `ugc_platform` narrows them. Selecting any adds `meta.social_availability` (per section, which UGC platforms report that signal) — the streaming availability matrix does not cover them. ' +
+    "The two `track-*-daily` sections return one point per date, platform and track, so a single call scoped to a release gives every track its own daily series instead of one call per track. They require `release_id`, `isrc` or `upc`, and they are returned only when named in `metrics` — nothing else selects them. Their cost is track count x days x platforms, and an over-large selection is refused with a 422 naming its three remedies: shorten the window, set `platform`, or narrow to a single `isrc`. `track-listeners-daily` is a SUM of each platform track entry's daily listener count, not a distinct count of people, and is not summable across dates; `meta.aggregation` states that on any response projecting it. Availability differs from the streaming sections — check get_analytics_availability. " +
     'Rate-limited ~60/min; windows over 90 days draw a separate lower ~30/min budget — prefer shorter windows for polling. A 429 carries retry_after_seconds.',
   inputShape: {
     start_date: z.string().describe('Window start, YYYY-MM-DD.'),
