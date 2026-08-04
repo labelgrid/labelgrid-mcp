@@ -93,6 +93,7 @@ const PLATFORMS = [
   'BOOMPLAY',
   'AWA',
   'AUDIOMACK',
+  'AMAZON',
   'KUGOU',
   'KUWO',
   'QQMUSIC',

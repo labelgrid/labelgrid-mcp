@@ -111,7 +111,16 @@ describe('get_analytics', () => {
     ]) {
       expect(schema.safeParse({ ...base, metrics: [metric] }).success).toBe(true);
     }
-    for (const platform of ['DEEZER', 'BOOMPLAY', 'AWA', 'AUDIOMACK', 'KUGOU', 'KUWO', 'QQMUSIC']) {
+    for (const platform of [
+      'DEEZER',
+      'BOOMPLAY',
+      'AWA',
+      'AUDIOMACK',
+      'AMAZON',
+      'KUGOU',
+      'KUWO',
+      'QQMUSIC',
+    ]) {
       expect(schema.safeParse({ ...base, metrics: ['streams'], platform }).success).toBe(true);
     }
   });
