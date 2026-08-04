@@ -11,9 +11,11 @@ import { applyProjection } from '../projection.js';
 import type { ToolDef } from './types.js';
 
 /**
- * The 47 metric sections the summary endpoint can return, in the server's
- * canonical order: the streaming sections first, then the social and UGC
- * family, then the per-track daily series.
+ * The 47 metric sections the summary endpoint can return. The server's canonical
+ * order — the order it projects sections into the response — is the streaming
+ * sections, then the per-track daily series, then the social and UGC family.
+ * This list groups the social and UGC family last instead; only membership
+ * matters here, since the enum validates which keys are legal, not their order.
  */
 const METRICS = [
   'streams',
