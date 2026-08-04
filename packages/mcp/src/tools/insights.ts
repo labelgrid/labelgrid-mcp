@@ -105,25 +105,18 @@ const getAnalytics: ToolDef = {
   gate: 'read',
   title: 'Get streaming and social analytics',
   description:
-    'Streaming analytics summary. Window capped at 400 days; `metrics` takes 1-12 section keys per request (split larger selections — responses are cached). ' +
-    'KUGOU/KUWO/QQMUSIC report weekly: one point per week carrying the whole week — never average it per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
-    'Call get_analytics_availability first for section-per-platform support. ' +
-    'The `social-*` / `soundcloud-engagement` sections cover social and UGC usage instead of streaming: their `platform` is a UGC platform; a use, view and play are distinct quantities, never summed with each other or with streams; `ugc_platform` narrows them. Selecting any adds `meta.social_availability` (which UGC platforms report each signal) — the streaming matrix excludes them. ' +
-    'The `track-*-daily` sections need a `release_id`, `isrc` or `upc` scope. `track-listeners-daily` sums per-entry daily counts: not distinct people, not summable across dates. ' +
-    'Rate-limited ~60/min; windows over 90 days draw a separate lower ~30/min budget — prefer shorter windows for polling. A 429 carries retry_after_seconds.',
+    'Streaming analytics summary. Window capped at 400 days; `metrics` takes 1-12 section keys per request (split larger selections; responses cached). ' +
+    'KUGOU/KUWO/QQMUSIC report weekly: one point carries the whole week — never average per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
+    'See get_analytics_availability for per-platform support. ' +
+    'Sections aggregate over the resolved filter scope: a `upc` filter gives release totals, not per-track rows. For those use `track-*-daily` (needs a `release_id`, `isrc` or `upc` scope) or get_analytics_rankings. `track-listeners-daily` sums per-entry daily counts: not distinct people, not summable across dates. ' +
+    '`social-*` / `soundcloud-engagement` cover social/UGC usage, not streaming: `platform` is a UGC platform, `ugc_platform` narrows them; use, view and play are distinct quantities never summed together or with streams. Selecting any adds `meta.social_availability` (which UGC platforms report each signal); the streaming matrix omits them. ' +
+    'Rate-limited ~60/min; windows over 90 days draw a separate ~30/min budget — prefer short windows for polling. A 429 carries retry_after_seconds.',
   inputShape: {
     start_date: z.string().describe('Window start, YYYY-MM-DD.'),
     end_date: z.string().describe('Window end, YYYY-MM-DD.'),
-    metrics: z
-      .array(z.enum(METRICS))
-      .min(1)
-      .max(MAX_METRICS_PER_REQUEST)
-      .describe('Section keys, 1-12 per request.'),
+    metrics: z.array(z.enum(METRICS)).min(1).max(MAX_METRICS_PER_REQUEST),
     platform: z.enum(PLATFORMS).optional(),
-    ugc_platform: z
-      .enum(UGC_PLATFORMS)
-      .optional()
-      .describe('Narrows the social/UGC sections only.'),
+    ugc_platform: z.enum(UGC_PLATFORMS).optional().describe('Social/UGC sections only.'),
     release_id: z.number().int().positive().optional(),
     isrc: z.string().optional(),
     upc: z.string().optional(),
@@ -174,15 +167,15 @@ const getAnalyticsRankings: ToolDef = {
   gate: 'read',
   title: 'Get analytics rankings',
   description:
-    'Top-N rankings for a window, ordered by summed streams. Pick ONE `view`: ' +
-    '`leaderboards` — your top artists, tracks or albums (`type` required; `all` returns all three in one request). ' +
-    '`placements` — the playlists and radio containers driving streams, summed across storefronts. ' +
-    'Same scope filters as get_analytics; `limit` 1-50 (default 10). Under a `platform` filter, an `availability` of `not_available_for_platform` means that platform reports no ranking and `data` is empty.',
+    'Top-N rankings for a window, ordered by summed streams — the per-entity breakdown of a scope: `type` tracks with a `upc`/`release_id` filter ranks the tracks on that release. Pick ONE `view`: ' +
+    '`leaderboards` — your top artists, tracks or albums (`type` required; `all` returns all three in one call). ' +
+    '`placements` — playlists and radio containers driving streams, summed across storefronts. ' +
+    'Same scope filters as get_analytics; `limit` 1-50 (default 10). Under a `platform` filter, `availability: not_available_for_platform` means no ranking there and `data` is empty.',
   inputShape: {
-    view: z.enum(RANKING_VIEWS).describe('Which ranking read.'),
+    view: z.enum(RANKING_VIEWS),
     start_date: z.string().describe('Window start, YYYY-MM-DD.'),
     end_date: z.string().describe('Window end, YYYY-MM-DD.'),
-    type: z.enum(LEADERBOARD_TYPES).optional().describe('Required for view leaderboards.'),
+    type: z.enum(LEADERBOARD_TYPES).optional(),
     platform: z.enum(PLATFORMS).optional(),
     ugc_platform: z.enum(UGC_PLATFORMS).optional(),
     release_id: z.number().int().positive().optional(),
@@ -194,7 +187,7 @@ const getAnalyticsRankings: ToolDef = {
       .int()
       .positive()
       .optional()
-      .describe('Narrow to one of your own labels; it can never widen scope.'),
+      .describe('Narrow to one of your own labels; never widens scope.'),
     limit: z.number().int().positive().max(MAX_RANKING_LIMIT).optional(),
   },
   annotations: { readOnlyHint: true },
