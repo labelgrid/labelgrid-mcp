@@ -5,6 +5,22 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-05
+
+### Changed
+
+- `get_analytics` states how the summary aggregates: every section aggregates
+  over the resolved filter scope, so a `upc` filter returns release totals
+  rather than a row per track. Per-track output comes from the `track-*-daily`
+  sections (which need a `release_id`, `isrc` or `upc` scope) or from
+  `get_analytics_rankings`.
+- `get_analytics_rankings` is described as the per-entity breakdown of a scope
+  as well as a leaderboard — `type: 'tracks'` with a `upc` or `release_id`
+  filter ranks the tracks on that release.
+- Descriptions on the `metrics`, `view` and `type` parameters were removed where
+  they restated the parameter's own enum or its tool description. No parameter,
+  enum value or validation rule changed.
+
 ## [0.6.0] - 2026-08-05
 
 ### Added
