@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@labelgrid/core` is primarily an internal shared client for the LabelGrid MCP
 server and CLI — there are no API-stability promises before 1.0.
 
+## [0.2.1] - 2026-08-05
+
+### Changed
+
+- The catalog entity descriptions carried by this package were tightened. The
+  `RELEASE_LOCKED_FIELDS` caveat now lives only on the tool it applies to
+  instead of being repeated for every entity. Field requirements, paths and
+  exported types are unchanged.
+
 ## [0.2.0] - 2026-07-23
 
 ### Added

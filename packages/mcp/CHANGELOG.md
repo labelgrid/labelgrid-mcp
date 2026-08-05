@@ -5,6 +5,42 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-05
+
+### Added
+
+- `get_analytics_rankings` — top-N rankings for a window, ordered by summed
+  streams. `view: 'leaderboards'` ranks top artists, tracks or albums (`type`
+  required); `view: 'placements'` ranks the playlists and radio containers
+  driving streams.
+- `get_rate_limit` — the account's API rate budget per category, with the
+  ceiling, the remaining allowance and the window reset.
+- 10 new analytics section keys (47 total): eight social and UGC sections
+  (`social-usage-over-time`, `social-reach-over-time`, `social-platform-mix`,
+  `social-top-tracks`, `social-territory`, `social-artist-reach`,
+  `social-artist-reach-daily`, `soundcloud-engagement`) and two per-track daily
+  series (`track-streams-daily`, `track-listeners-daily`, which need a
+  `release_id`, `isrc` or `upc` scope).
+- `ugc_platform` filter on `get_analytics`, narrowing the social and UGC
+  sections.
+- `AMAZON` as a `platform` filter value on `get_analytics` and
+  `get_analytics_rankings` (11 total), matching the platforms the API accepts.
+- `query_financials` concise mode now returns the fee fields — `labelgrid_fee`,
+  `platform_fee_usd`, `ugc_fee_usd`, `labelgrid_rate` and `labelgrid_ugc_rate`.
+  Previously a fee was visible only with `response_format: 'detailed'`.
+
+### Changed
+
+- Social and UGC sections report their own per-section availability in
+  `meta.social_availability`; the streaming availability matrix does not cover
+  them. A use, a view and a play are distinct quantities and are never summed
+  with each other or with streams.
+- `track-listeners-daily` sums each platform track entry's daily count. Where a
+  track exists as more than one entry it is not a distinct count of people, and
+  it is not summable across dates.
+- Tool descriptions across the catalog were tightened. No tool names,
+  parameters or behavior changed beyond the items above.
+
 ## [0.5.0] - 2026-07-27
 
 ### Added
