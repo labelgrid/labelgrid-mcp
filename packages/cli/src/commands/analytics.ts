@@ -1,7 +1,11 @@
 /**
  * `labelgrid analytics get` — the streaming analytics summary. `--start`,
  * `--end` and `--metrics` are required (the server caps the window at 400 days
- * and accepts 1-12 section keys per request out of the 37 available).
+ * and accepts 1-12 section keys per request out of the 47 available). Every
+ * section aggregates over the resolved filter scope, so `--upc` returns release
+ * totals rather than per-track rows; the per-track daily series live in the
+ * `track-streams-daily` and `track-listeners-daily` sections, which need a
+ * `--release-id`, `--isrc` or `--upc` scope.
  * `labelgrid analytics availability` — the static section-by-platform
  * availability matrix and per-platform reporting cadence.
  */
@@ -28,6 +32,12 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
     .option('--isrc <isrc>', 'narrow to one ISRC')
     .option('--upc <upc>', 'narrow to one UPC')
     .option('--limit <n>', 'per-section item limit')
+    .addHelpText(
+      'after',
+      '\nSections aggregate over the filter scope: --upc returns release totals, not per-track rows.' +
+        '\nFor per-track daily output select the track-streams-daily / track-listeners-daily sections' +
+        '\n(they need a --release-id, --isrc or --upc scope).',
+    )
     .action(
       async (
         opts: {
