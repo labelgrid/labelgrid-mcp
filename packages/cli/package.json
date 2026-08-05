@@ -1,6 +1,6 @@
 {
   "name": "@labelgrid/cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Official LabelGrid CLI — manage your catalog, releases, distribution and royalties from the terminal",
   "type": "module",
   "keywords": ["labelgrid", "music-distribution", "cli"],
@@ -25,7 +25,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@labelgrid/core": "0.2.0",
+    "@labelgrid/core": "0.2.1",
     "commander": "^14.0.0"
   }
 }
