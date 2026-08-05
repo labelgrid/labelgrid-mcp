@@ -1,6 +1,6 @@
 {
   "name": "@labelgrid/mcp",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "mcpName": "io.github.labelgrid/labelgrid-mcp",
   "description": "Official LabelGrid MCP server — connect your AI client to your LabelGrid account",
   "type": "module",
