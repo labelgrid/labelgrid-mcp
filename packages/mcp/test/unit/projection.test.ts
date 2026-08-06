@@ -91,7 +91,7 @@ describe('projectConcise', () => {
     expect(projectConcise(42, ['title'])).toBe(42);
   });
 
-  it('keeps every payout fee field on a statements payload', () => {
+  it('keeps the account credit and every payout fee field on a statements payload', () => {
     const out = projectConcise(
       {
         data: [
@@ -99,6 +99,7 @@ describe('projectConcise', () => {
             id: 7,
             invoice_number: 'INV202601',
             gross_usd: 120,
+            credit_amount: 12.34,
             labelgrid_fee: 18,
             labelgrid_rate: 0.1,
             labelgrid_ugc_rate: 0.3,
@@ -115,6 +116,7 @@ describe('projectConcise', () => {
         id: 7,
         invoice_number: 'INV202601',
         gross_usd: 120,
+        credit_amount: 12.34,
         labelgrid_fee: 18,
         labelgrid_rate: 0.1,
         labelgrid_ugc_rate: 0.3,
@@ -132,6 +134,7 @@ describe('projectConcise', () => {
             id: 8,
             invoice_number: 'INV202412',
             gross_usd: 80,
+            credit_amount: 0,
             labelgrid_fee: 8,
             labelgrid_rate: 0.1,
             labelgrid_ugc_rate: null,
@@ -149,11 +152,36 @@ describe('projectConcise', () => {
         id: 8,
         invoice_number: 'INV202412',
         gross_usd: 80,
+        credit_amount: 0,
         labelgrid_fee: 8,
         labelgrid_rate: 0.1,
         labelgrid_ugc_rate: null,
         platform_fee_usd: null,
         ugc_fee_usd: null,
+      },
+    ]);
+  });
+
+  it('keeps an explicit null account credit on a scoped financial row', () => {
+    const out = projectConcise(
+      {
+        data: [
+          {
+            scope: 'label',
+            period: '2026-01',
+            credit_amount: null,
+            memo_blob: 'drop me',
+          },
+        ],
+      },
+      CONCISE_ALLOWLISTS.query_financials,
+    ) as Record<string, unknown>;
+
+    expect(out.data).toEqual([
+      {
+        scope: 'label',
+        period: '2026-01',
+        credit_amount: null,
       },
     ]);
   });
@@ -228,6 +256,7 @@ describe('per-tool allowlists', () => {
       'status',
       'currency',
       'gross_usd',
+      'credit_amount',
       'labelgrid_fee',
       'platform_fee_usd',
       'ugc_fee_usd',
