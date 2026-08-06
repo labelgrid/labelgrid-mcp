@@ -76,6 +76,7 @@ export const CONCISE_ALLOWLISTS: Record<string, readonly string[]> = {
     'status',
     'currency',
     'gross_usd',
+    'credit_amount',
     'labelgrid_fee',
     'platform_fee_usd',
     'ugc_fee_usd',
