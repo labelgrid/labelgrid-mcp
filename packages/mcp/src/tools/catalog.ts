@@ -18,6 +18,7 @@ import {
   ENTITIES,
   ENTITY_NAMES,
   type EntityName,
+  REPLACEMENT_ENTITIES,
   assertAllowedExtension,
 } from '@labelgrid/core';
 import { z } from 'zod';
@@ -166,19 +167,53 @@ const updateCatalogItem: ToolDef = {
   },
 };
 
+/** 'writer and publisher' — read off the registry, never spelled out by hand. */
+const REPLACEMENT_ENTITY_LIST = REPLACEMENT_ENTITIES.join(' and ');
+
 const deleteCatalogItem: ToolDef = {
   name: 'delete_catalog_item',
   toolset: 'catalog',
   gate: 'safe_write',
   title: 'Delete a catalog item',
-  description: `Delete a catalog entity. The API refuses deletes that would orphan data — ${entityDoc(
-    (s) => s.deleteNote,
-  )}`,
-  inputShape: { entity: entityArg, id: idArg },
+  description:
+    `Delete a catalog entity. The API refuses deletes that would orphan data — ${entityDoc(
+      (s) => s.deleteNote,
+    )}` +
+    ` \`replace_with\` — ${REPLACEMENT_ENTITY_LIST} only — is the id inheriting those credits; a 422 REPLACEMENT_UNAVAILABLE means nothing was deleted.`,
+  inputShape: {
+    entity: entityArg,
+    id: idArg,
+    replace_with: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        `${REPLACEMENT_ENTITY_LIST} only: the id that takes over every credit held by the one being deleted.`,
+      ),
+  },
   annotations: { destructiveHint: true },
   handler: (args, { client }) => {
-    const spec = ENTITIES[args.entity as EntityName];
-    return client.delete(`${spec.path}/${args.id}`);
+    const entity = args.entity as EntityName;
+    const spec = ENTITIES[entity];
+    const path = `${spec.path}/${args.id}`;
+    const replaceWith = args.replace_with as number | undefined;
+    if (replaceWith === undefined) {
+      return client.delete(path);
+    }
+    // Only two endpoints take the parameter. Dropping it for the others would
+    // delete on the caller's behalf while silently ignoring the reassignment
+    // they asked for, so the call is refused before anything is sent.
+    if (!spec.acceptsDeleteReplacement) {
+      return Promise.resolve({
+        error: {
+          code: 'INVALID_SELECTOR',
+          message: `The ${entity} delete does not accept replace_with — only ${REPLACEMENT_ENTITY_LIST} deletes do. Delete without it, or clear the references first.`,
+          status: 0,
+        },
+      });
+    }
+    return client.delete(path, { replace_with: replaceWith });
   },
 };
 

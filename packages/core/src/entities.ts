@@ -26,6 +26,14 @@ export type EntitySpec = {
   fieldsDoc: string;
   /** One-line doc of the server-side delete refusals. */
   deleteNote: string;
+  /**
+   * Whether this entity's DELETE endpoint accepts `replace_with` — the id of the
+   * entity that takes over every credit held by the one being deleted, rewritten
+   * before the delete. Only the writer and publisher endpoints have it. Stated
+   * for every entity rather than defaulted, so a new entity cannot inherit an
+   * answer nobody gave.
+   */
+  acceptsDeleteReplacement: boolean;
 };
 
 export const ENTITIES: Record<EntityName, EntitySpec> = {
@@ -36,6 +44,7 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
       'label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base.',
     deleteNote:
       'label: refused while the label still has releases — remove or reassign its releases first.',
+    acceptsDeleteReplacement: false,
   },
   artist: {
     path: '/artists',
@@ -43,19 +52,24 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     fieldsDoc:
       'artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs.',
     deleteNote: 'artist: refused while still referenced by releases or tracks.',
+    acceptsDeleteReplacement: false,
   },
   writer: {
     path: '/writers',
     filtersDoc: 'writer: name, ipi.',
     fieldsDoc:
       'writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi).',
-    deleteNote: 'writer: refused while still referenced by tracks.',
+    deleteNote:
+      'writer: refused while still referenced by tracks or artists, unless replace_with reassigns those credits.',
+    acceptsDeleteReplacement: true,
   },
   publisher: {
     path: '/publishers',
     filtersDoc: 'publisher: name, ipi.',
     fieldsDoc: 'publisher — required: name; optional: ipi, pro, isni, controlled_publisher.',
-    deleteNote: 'publisher: refused while still referenced by writers.',
+    deleteNote:
+      'publisher: refused while still referenced by tracks or label default publishers, unless replace_with reassigns those credits.',
+    acceptsDeleteReplacement: true,
   },
   release: {
     path: '/releases',
@@ -63,6 +77,7 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     fieldsDoc:
       'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs).',
     deleteNote: 'release: only a never-submitted draft can be deleted.',
+    acceptsDeleteReplacement: false,
   },
   track: {
     path: '/tracks',
@@ -70,5 +85,15 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     fieldsDoc:
       'track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more.',
     deleteNote: 'track: refused once the release is no longer an editable draft.',
+    acceptsDeleteReplacement: false,
   },
 };
+
+/**
+ * The entities whose DELETE accepts `replace_with`, derived from the registry so
+ * the tool schema, its description and its refusal message cannot disagree with
+ * the table or with each other.
+ */
+export const REPLACEMENT_ENTITIES: readonly EntityName[] = ENTITY_NAMES.filter(
+  (name) => ENTITIES[name].acceptsDeleteReplacement,
+);

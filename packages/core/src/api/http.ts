@@ -439,8 +439,13 @@ export class LabelGridClient {
     });
   }
 
-  delete<T>(path: string): Promise<ApiResult<T>> {
-    return this.send<T>('DELETE', path);
+  /**
+   * A delete carries its parameters in the query string, never in a body: RFC
+   * 9110 gives a DELETE body no defined semantics and intermediaries drop it.
+   * Omitting `query` sends exactly the URL it always did.
+   */
+  delete<T>(path: string, query?: Record<string, unknown>): Promise<ApiResult<T>> {
+    return this.send<T>('DELETE', path, { query });
   }
 
   /**

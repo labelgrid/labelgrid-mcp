@@ -267,6 +267,13 @@ describe('update_catalog_item', () => {
 });
 
 describe('delete_catalog_item', () => {
+  const BASE = 'https://api.example.test/api/public';
+  const REPLACEMENT_PATHS: Array<[string, string]> = [
+    ['writer', '/writers'],
+    ['publisher', '/publishers'],
+  ];
+  const NON_REPLACEMENT_ENTITIES = ['label', 'artist', 'release', 'track'];
+
   for (const [entity, path] of ENTITY_PATHS) {
     it(`entity=${entity} → DELETE ${path}/{id}`, async () => {
       const { fetchFn, ctx } = harness();
@@ -274,15 +281,71 @@ describe('delete_catalog_item', () => {
       expect(lastInit(fetchFn).method).toBe('DELETE');
       expect(lastUrl(fetchFn)).toContain(`${path}/9`);
     });
+
+    it(`entity=${entity} without replace_with sends the bare URL — no stray query string`, async () => {
+      const { fetchFn, ctx } = harness();
+      await byName('delete_catalog_item').handler({ entity, id: 9 }, ctx);
+      expect(lastUrl(fetchFn)).toBe(`${BASE}${path}/9`);
+      expect(lastUrl(fetchFn)).not.toContain('?');
+      expect(lastInit(fetchFn).body).toBeUndefined();
+    });
   }
+
+  for (const [entity, path] of REPLACEMENT_PATHS) {
+    it(`entity=${entity} with replace_with → DELETE ${path}/{id}?replace_with={id}`, async () => {
+      const { fetchFn, ctx } = harness();
+      await byName('delete_catalog_item').handler({ entity, id: 9, replace_with: 4 }, ctx);
+      expect(lastInit(fetchFn).method).toBe('DELETE');
+      expect(lastUrl(fetchFn)).toBe(`${BASE}${path}/9?replace_with=4`);
+      // The replacement travels in the query string, never in a body — a DELETE
+      // body has no defined semantics and intermediaries drop it.
+      expect(lastInit(fetchFn).body).toBeUndefined();
+    });
+  }
+
+  it('refuses replace_with on an entity whose delete does not accept it, with no HTTP call', async () => {
+    for (const entity of NON_REPLACEMENT_ENTITIES) {
+      const { fetchFn, ctx } = harness();
+      const r = await byName('delete_catalog_item').handler(
+        { entity, id: 9, replace_with: 4 },
+        ctx,
+      );
+      expect('error' in r && r.error.code).toBe('INVALID_SELECTOR');
+      expect('error' in r && r.error.message).toContain('replace_with');
+      expect('error' in r && r.error.message).toContain(entity);
+      // Dropping it silently would delete on a caller's behalf while ignoring the
+      // reassignment they asked for, so nothing is sent at all.
+      expect(fetchFn).not.toHaveBeenCalled();
+    }
+  });
+
+  it('validates replace_with as a positive integer id via zod', () => {
+    const schema = z.object(byName('delete_catalog_item').inputShape);
+    expect(schema.safeParse({ entity: 'writer', id: 9 }).success).toBe(true);
+    expect(schema.safeParse({ entity: 'writer', id: 9, replace_with: 4 }).success).toBe(true);
+    expect(schema.safeParse({ entity: 'writer', id: 9, replace_with: 0 }).success).toBe(false);
+    expect(schema.safeParse({ entity: 'writer', id: 9, replace_with: -1 }).success).toBe(false);
+    expect(schema.safeParse({ entity: 'writer', id: 9, replace_with: 1.5 }).success).toBe(false);
+    expect(schema.safeParse({ entity: 'writer', id: 9, replace_with: '4' }).success).toBe(false);
+  });
 
   it('carries the per-entity delete refusals in the description', () => {
     const desc = byName('delete_catalog_item').description;
     expect(desc).toContain('remove or reassign its releases first');
     expect(desc).toContain('referenced by releases or tracks');
-    expect(desc).toContain('referenced by tracks');
-    expect(desc).toContain('referenced by writers');
+    expect(desc).toContain('referenced by tracks or artists');
+    expect(desc).toContain('label default publishers');
+    // The publisher delete is not refused on writer references; the description
+    // said it was, and must not say it again.
+    expect(desc).not.toContain('referenced by writers');
     expect(desc).toContain('draft');
+  });
+
+  it('documents replace_with, the entities that accept it, and the unavailable-replacement answer', () => {
+    const desc = byName('delete_catalog_item').description;
+    expect(desc).toContain('replace_with');
+    expect(desc).toContain('writer and publisher only');
+    expect(desc).toContain('REPLACEMENT_UNAVAILABLE');
   });
 });
 
