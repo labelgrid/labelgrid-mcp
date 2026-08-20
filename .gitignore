@@ -7,6 +7,9 @@ dist/
 .DS_Store
 tmp/
 .impeccable/
+.planning/
+specs/
+.constellation/
 mcpb/build/
 mcpb/deps/
 labelgrid.mcpb
