@@ -5,6 +5,21 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-20
+
+### Added
+
+- `delete_catalog_item` accepts `replace_with` for writers and publishers. The
+  replacement receives every credit before the original is deleted. Other
+  entity types reject the parameter without sending a delete request.
+- `query_financials` concise responses include `credit_amount`, preserving
+  positive, zero and explicit null values from the API.
+
+### Changed
+
+- Writer and publisher deletion guidance now names all references that can
+  block deletion and documents the `REPLACEMENT_UNAVAILABLE` response.
+
 ## [0.6.1] - 2026-08-05
 
 ### Changed

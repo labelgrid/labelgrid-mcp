@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@labelgrid/core` is primarily an internal shared client for the LabelGrid MCP
 server and CLI — there are no API-stability promises before 1.0.
 
+## [0.2.2] - 2026-08-20
+
+### Added
+
+- Catalog entities now declare whether their delete endpoint accepts a
+  replacement, allowing clients to expose reassignment only for writers and
+  publishers.
+- `LabelGridClient.delete()` accepts optional query parameters while preserving
+  the existing request URL byte-for-byte when none are supplied.
+
+### Changed
+
+- Writer and publisher delete guidance now names every reference that can block
+  deletion.
+
 ## [0.2.1] - 2026-08-05
 
 ### Changed
