@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENTITIES, ENTITY_NAMES } from '../../src/entities.js';
+import { ENTITIES, ENTITY_NAMES, REPLACEMENT_ENTITIES } from '../../src/entities.js';
 
 describe('entity registry', () => {
   it('declares exactly the six catalog entities', () => {
@@ -50,12 +50,46 @@ describe('entity registry', () => {
     expect(ENTITIES.artist.filtersDoc).toContain('artist_name');
     expect(ENTITIES.writer.filtersDoc).toContain('ipi');
     expect(ENTITIES.publisher.filtersDoc).toContain('ipi');
-    // The delete refusals survive.
+    // The delete refusals survive. (What the writer and publisher refusals name
+    // is pinned in its own test below — this one only checks they survived.)
     expect(ENTITIES.label.deleteNote).toContain('releases');
     expect(ENTITIES.artist.deleteNote).toContain('referenced');
     expect(ENTITIES.writer.deleteNote).toContain('tracks');
-    expect(ENTITIES.publisher.deleteNote).toContain('writers');
+    expect(ENTITIES.publisher.deleteNote).toContain('tracks');
     expect(ENTITIES.release.deleteNote).toContain('draft');
     expect(ENTITIES.track.deleteNote).toContain('draft');
+  });
+
+  it('declares delete-replacement support per entity: writer and publisher only', () => {
+    // Stated for every entity rather than inferred, so a seventh entity cannot
+    // inherit an answer nobody gave.
+    for (const name of ENTITY_NAMES) {
+      expect(typeof ENTITIES[name].acceptsDeleteReplacement).toBe('boolean');
+    }
+    expect(ENTITY_NAMES.filter((n) => ENTITIES[n].acceptsDeleteReplacement)).toEqual([
+      'writer',
+      'publisher',
+    ]);
+    expect([...REPLACEMENT_ENTITIES]).toEqual(['writer', 'publisher']);
+  });
+
+  it('names the real refusals on the writer and publisher delete notes', () => {
+    // A writer delete is refused on TRACK and ARTIST credits — both, not tracks alone.
+    expect(ENTITIES.writer.deleteNote).toContain('tracks');
+    expect(ENTITIES.writer.deleteNote).toContain('artists');
+    // A publisher delete is refused on TRACK credits and on a LABEL's default
+    // publishers. It is not refused on writer references, so that is pinned as a
+    // negative: the note said so once and it was never true.
+    expect(ENTITIES.publisher.deleteNote).toContain('tracks');
+    expect(ENTITIES.publisher.deleteNote).toContain('label');
+    expect(ENTITIES.publisher.deleteNote).not.toContain('writers');
+    // Both name the way past the refusal.
+    expect(ENTITIES.writer.deleteNote).toContain('replace_with');
+    expect(ENTITIES.publisher.deleteNote).toContain('replace_with');
+    // No other entity's note offers a parameter its endpoint does not accept.
+    for (const name of ENTITY_NAMES) {
+      if (ENTITIES[name].acceptsDeleteReplacement) continue;
+      expect(ENTITIES[name].deleteNote).not.toContain('replace_with');
+    }
   });
 });

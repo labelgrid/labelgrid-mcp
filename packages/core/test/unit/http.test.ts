@@ -263,6 +263,18 @@ describe('LabelGridClient HTTP methods', () => {
     expect(lastInit(fetchFn).method).toBe('DELETE');
   });
 
+  it('serializes a delete query, and sends no query string at all without one', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(204));
+    const c = makeClient(fetchFn as unknown as typeof fetch);
+    await c.delete('/writers/9');
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/writers/9`);
+    await c.delete('/writers/9', { replace_with: 4 });
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/writers/9?replace_with=4`);
+    // An explicitly-undefined value is dropped, not spelled as an empty parameter.
+    await c.delete('/writers/9', { replace_with: undefined });
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/writers/9`);
+  });
+
   it('supports idempotency on put', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     await makeClient(fetchFn as unknown as typeof fetch).put('/x', {}, { idempotency: true });

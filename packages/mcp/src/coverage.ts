@@ -147,6 +147,8 @@ export const EXCLUDED: Record<string, string> = {
   'GET /resolve/label/{labelSlug}': 'label-website resolution — not exposed in v1',
   'GET /site-settings/{label}': 'label-website settings — not exposed in v1',
   'GET /site-settings/links/{label}': 'label-website settings — not exposed in v1',
+  'GET /tracks/{track}/file-upload-attempts/{uploadAttempt}':
+    'per-upload audio processing status — not exposed in v1',
   'GET /tracks/{track}/licenses/{trackLicense}/download':
     'license file download — not exposed in v1',
   'GET /transactions/csv': 'transaction CSV export — not exposed in v1',
