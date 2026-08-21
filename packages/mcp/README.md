@@ -138,7 +138,7 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 | Tool | Gate | Description |
 | --- | --- | --- |
 | `get_release_review` | read | Read a release's automated quality-check results. Pick ONE view with `view`: `issues` lists the review issues raised against the release — each with a code (see list_reference_data type issue_definitions), severity, and whether it blocks distribution. `quality_report` returns the Preflight QC quality report — customer-facing issues to review before confirming distribution; Preflight QC is an optional add-on — without it the API returns a 403, surfaced verbatim. |
-| `get_delivery_queue` | read | List your account's distribution queue, paginated — one entry per (release, outlet) delivery with its status (e.g. pending review, processing, scheduled, complete, error). Filter by `release_id`, `outlet_id`, or `status`. |
+| `get_delivery_queue` | read | Read a release's canonical delivery status: its overall state, current and historical delivery predicates, and one current state per outlet. The API owns all queue-history interpretation. A release outside your account is indistinguishable from an unknown release (`RELEASE_NOT_ACCESSIBLE`). |
 | `get_landing_config` | read | Retrieve a release's smart-link landing-page configuration: enabled state, style/mode, custom copy, action list, pre-order links. Change it via manage_release_links (action update_landing_config). |
 | `list_track_licenses` | read | List a track's licenses (e.g. cover/mechanical or sample clearances), paginated. Pass `license_id` to retrieve one license instead. |
 | `run_release_checks` | write | Run an automated check on a release. Pick ONE with `check`: `validate` returns problems that would block distribution (human-readable `errors` + machine-readable `errors_structured`); it changes nothing and is safe to repeat — run it before distributing. `refresh_quality_report` re-runs the Preflight QC checks (read the report with get_release_review view quality_report); an hourly refresh budget may rate-limit frequent calls. Preflight QC is an optional add-on. |
@@ -238,7 +238,7 @@ Version 0.3.0 is a **breaking release**: the 83 per-endpoint tools were consolid
 | `list_artificial_streams` | `query_artificial_streaming` (`view: 'records'`) |
 | `get_artificial_fee_breakdown` | `query_artificial_streaming` (`view: 'fee_breakdown'`, `period: 'YYYY-MM'`) |
 | `get_analytics` | `get_analytics` (unchanged) |
-| `get_delivery_queue` | `get_delivery_queue` (unchanged) |
+| `get_delivery_queue` | `get_delivery_queue` (`release_id` is now required; returns canonical delivery status) |
 | `get_landing_config` | `get_landing_config` (unchanged) |
 | `list_statements` | `query_financials` (`view: 'statements'`) |
 | `get_statement` | `query_financials` (`view: 'statement_detail'`, `invoice_number: …`) |

@@ -24,6 +24,7 @@ export type ApiError = {
   suggestion?: string;
   retry_after_seconds?: number;
   errors?: unknown;
+  details?: unknown;
   /** Structured validation detail passed through verbatim from the API (422). */
   errors_structured?: unknown;
 };
@@ -87,11 +88,12 @@ type ServerErrorParts = {
   field?: string;
   errors?: unknown;
   errors_structured?: unknown;
+  details?: unknown;
 };
 
 /**
- * Extracts a code/message/errors triple from any of the four backend error body
- * shapes: `{message}`, `{error: string}`, `{errors}`, `{error: {code, message}}`.
+ * Extracts typed fields from the backend's top-level and nested error shapes,
+ * including public `error_code` and `details` fields.
  */
 function extractServerError(body: unknown): ServerErrorParts {
   if (typeof body === 'string') {
@@ -103,12 +105,24 @@ function extractServerError(body: unknown): ServerErrorParts {
   const record = body as Record<string, unknown>;
   const errors = record.errors;
   const errorsStructured = record.errors_structured;
+  const details = record.details;
+  const topLevelCode =
+    typeof record.error_code === 'string'
+      ? record.error_code
+      : typeof record.code === 'string'
+        ? record.code
+        : undefined;
 
   // Shape: { error: { code, message } }
   if (record.error !== null && typeof record.error === 'object') {
     const nested = record.error as Record<string, unknown>;
     return {
-      code: typeof nested.code === 'string' ? nested.code : undefined,
+      code:
+        typeof nested.error_code === 'string'
+          ? nested.error_code
+          : typeof nested.code === 'string'
+            ? nested.code
+            : topLevelCode,
       message:
         typeof nested.message === 'string'
           ? nested.message
@@ -117,24 +131,27 @@ function extractServerError(body: unknown): ServerErrorParts {
             : undefined,
       errors,
       errors_structured: errorsStructured,
+      details,
     };
   }
   // Shape: { error: 'string' }
   if (typeof record.error === 'string') {
     return {
-      code: typeof record.code === 'string' ? record.code : undefined,
+      code: topLevelCode,
       message: record.error,
       errors,
       errors_structured: errorsStructured,
+      details,
     };
   }
   // Shapes: { message } and/or { errors } and/or top-level { code }
   const parts: ServerErrorParts = {
-    code: typeof record.code === 'string' ? record.code : undefined,
+    code: topLevelCode,
     message: typeof record.message === 'string' ? record.message : undefined,
     field: typeof record.field === 'string' ? record.field : undefined,
     errors,
     errors_structured: errorsStructured,
+    details,
   };
   // Derive a message from the first validation error when none was given.
   if (parts.message === undefined && errors !== null && typeof errors === 'object') {
@@ -165,6 +182,7 @@ function normalizeError(res: Response, body: unknown): ApiError {
     status,
     ...(server.field !== undefined ? { field: server.field } : {}),
     ...(server.errors !== undefined ? { errors: server.errors } : {}),
+    ...(server.details !== undefined ? { details: server.details } : {}),
     ...extra,
   });
 
@@ -176,7 +194,10 @@ function normalizeError(res: Response, body: unknown): ApiError {
     case 403:
       return withCommon(server.code ?? 'FORBIDDEN', server.message ?? 'Forbidden.');
     case 404:
-      return withCommon('NOT_FOUND', server.message ?? 'The requested resource was not found.');
+      return withCommon(
+        server.code ?? 'NOT_FOUND',
+        server.message ?? 'The requested resource was not found.',
+      );
     case 409:
       return withCommon(
         server.code ?? 'CONFLICT',
@@ -196,7 +217,10 @@ function normalizeError(res: Response, body: unknown): ApiError {
     }
     default:
       if (status >= 500) {
-        return withCommon('SERVER_ERROR', server.message ?? 'The server encountered an error.');
+        return withCommon(
+          server.code ?? 'SERVER_ERROR',
+          server.message ?? 'The server encountered an error.',
+        );
       }
       return withCommon(
         server.code ?? 'ERROR',

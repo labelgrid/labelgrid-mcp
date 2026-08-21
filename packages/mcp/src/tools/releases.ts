@@ -1,5 +1,5 @@
 /**
- * Releases toolset: release-level reads (review results, the delivery queue,
+ * Releases toolset: release-level reads (review results, delivery status,
  * the smart-link landing config, track licenses) plus the safe-write release
  * checks, landing-page management and review-issue notes.
  *
@@ -49,28 +49,16 @@ const getDeliveryQueue: ToolDef = {
   name: 'get_delivery_queue',
   toolset: 'releases',
   gate: 'read',
-  title: 'Get the distribution queue',
+  title: 'Get release delivery status',
   description:
-    "List your account's distribution queue, paginated — one entry per (release, outlet) delivery with its status (e.g. pending review, processing, scheduled, complete, error). Filter by `release_id`, `outlet_id`, or `status`.",
+    "Read a release's canonical delivery status: its overall state, current and historical delivery predicates, and one current state per outlet. The API owns all queue-history interpretation. A release outside your account is indistinguishable from an unknown release (`RELEASE_NOT_ACCESSIBLE`).",
   inputShape: {
-    release_id: z.number().int().positive().optional().describe('Filter to one release.'),
-    outlet_id: z.number().int().positive().optional().describe('Filter to one outlet/store.'),
-    status: z.string().optional().describe('Filter by delivery status.'),
-    page: z.number().int().positive().optional(),
-    per_page: z.number().int().positive().optional(),
+    release_id: releaseId,
     response_format: responseFormat,
   },
   annotations: { readOnlyHint: true },
   handler: async (args, { client }) => {
-    const result = await client.get('/queues/distro', {
-      page: args.page,
-      per_page: args.per_page,
-      filter: {
-        release_id: args.release_id,
-        outlet_id: args.outlet_id,
-        status: args.status,
-      },
-    });
+    const result = await client.get(`/releases/${args.release_id}/delivery-status`);
     return applyProjection(result, 'get_delivery_queue', args.response_format);
   },
 };

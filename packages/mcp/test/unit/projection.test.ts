@@ -233,12 +233,15 @@ describe('per-tool allowlists', () => {
       'created_at',
     ]);
     expect([...CONCISE_ALLOWLISTS.get_delivery_queue]).toEqual([
-      'status',
+      'state',
+      'currently_live',
+      'ever_submitted',
+      'ever_delivered',
       'outlet',
-      'outlet_id',
-      'delivered_at',
-      'created_at',
-      'type',
+      'operation',
+      'queue_id',
+      'updated_at',
+      'error_code',
     ]);
     expect([...CONCISE_ALLOWLISTS.query_artificial_streaming]).toEqual([
       'dsp',

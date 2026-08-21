@@ -5,6 +5,16 @@ All notable changes to `@labelgrid/mcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `get_delivery_queue` now requires `release_id` and returns the public API's
+  canonical release delivery status, including aggregate state, historical
+  predicates, and one current state per outlet. It no longer reads or interprets
+  raw distribution queue rows; the former outlet, status, and pagination inputs
+  have been removed.
+
 ## [0.7.0] - 2026-08-20
 
 ### Added

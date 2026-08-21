@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `@labelgrid/core` is primarily an internal shared client for the LabelGrid MCP
 server and CLI — there are no API-stability promises before 1.0.
 
+## [Unreleased]
+
+### Changed
+
+- Public API `error_code` and `details` fields are preserved on normalized
+  errors, including typed 404 and 5xx responses.
+
 ## [0.2.2] - 2026-08-20
 
 ### Added
