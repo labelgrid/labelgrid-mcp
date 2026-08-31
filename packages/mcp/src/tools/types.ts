@@ -70,6 +70,7 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
   const bounded: ApiError = { ...r.error };
   if (bounded.errors !== undefined) bounded.errors = '[truncated]';
   if (bounded.errors_structured !== undefined) bounded.errors_structured = '[truncated]';
+  if (bounded.details !== undefined) bounded.details = '[truncated]';
   const boundedText = JSON.stringify({ error: bounded }, null, 2);
   if (boundedText.length <= MAX_TOOL_TEXT) {
     return { content: [{ type: 'text', text: boundedText }], isError: true };

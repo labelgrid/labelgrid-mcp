@@ -1,0 +1,17 @@
+{
+  "release_id": 123,
+  "state": "live",
+  "currently_live": true,
+  "ever_submitted": true,
+  "ever_delivered": true,
+  "outlets": [
+    {
+      "outlet": "spotify",
+      "state": "delivered",
+      "operation": "delivery",
+      "queue_id": 456,
+      "updated_at": "2026-08-21T12:00:00+00:00",
+      "error_code": null
+    }
+  ]
+}

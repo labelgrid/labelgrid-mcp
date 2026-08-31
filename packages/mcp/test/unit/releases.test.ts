@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { LabelGridClient } from '@labelgrid/core';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -5,8 +6,8 @@ import type { Config } from '../../src/config.js';
 import { releaseTools } from '../../src/tools/releases.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
-function harness(payload: unknown = { ok: true }) {
-  const fetchFn = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 }));
+function harness(payload: unknown = { ok: true }, status = 200) {
+  const fetchFn = vi.fn(async () => new Response(JSON.stringify(payload), { status }));
   const client = new LabelGridClient({
     baseUrl: 'https://api.example.test/api/public',
     token: 'tok',
@@ -124,36 +125,62 @@ describe('get_release_review', () => {
 });
 
 describe('get_delivery_queue', () => {
-  it('→ GET /queues/distro with filter[...] params and pagination', async () => {
-    const { fetchFn, ctx } = harness();
-    await byName('get_delivery_queue').handler(
-      { release_id: 21, outlet_id: 4, status: 'complete', per_page: 10 },
-      ctx,
-    );
-    const url = lastUrl(fetchFn);
-    expect(url).toContain('/queues/distro');
-    expect(url).toContain('filter[release_id]=21');
-    expect(url).toContain('filter[outlet_id]=4');
-    expect(url).toContain('filter[status]=complete');
-    expect(url).toContain('per_page=10');
+  it('requires release_id and rejects the retired raw-queue selectors', () => {
+    const schema = z.object(byName('get_delivery_queue').inputShape).strict();
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(schema.safeParse({ release_id: 21 }).success).toBe(true);
+    expect(schema.safeParse({ release_id: 21, outlet_id: 4 }).success).toBe(false);
+    expect(schema.safeParse({ release_id: 21, status: 'complete' }).success).toBe(false);
   });
 
-  it('projects concise by default and preserves ids', async () => {
-    const payload = {
-      data: [{ id: 1, outlet_id: 9, status: 'complete', internal_note: 'drop me' }],
-    };
+  it('→ GET /releases/{id}/delivery-status with no raw queue query', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_delivery_queue').handler({ release_id: 21 }, ctx);
+    const url = lastUrl(fetchFn);
+    expect(url).toContain('/releases/21/delivery-status');
+    expect(url).not.toContain('/queues/distro');
+    expect(url).not.toContain('?');
+  });
+
+  it('projects the shared canonical fixture without changing its semantics', async () => {
+    const payload = JSON.parse(
+      readFileSync(new URL('../fixtures/delivery-status/live.json', import.meta.url), 'utf8'),
+    );
     const { ctx } = harness(payload);
-    const r = await byName('get_delivery_queue').handler({}, ctx);
+    const r = await byName('get_delivery_queue').handler({ release_id: 123 }, ctx);
     const data = ('data' in r ? r.data : null) as Record<string, unknown>;
     expect(data._projection).toBe('concise');
-    expect(data.data).toEqual([{ id: 1, outlet_id: 9, status: 'complete' }]);
+    expect(data).toEqual({ ...payload, _projection: 'concise' });
   });
 
   it("response_format='detailed' returns the verbatim response", async () => {
-    const payload = { data: [{ id: 1, internal_note: 'kept' }] };
+    const payload = { release_id: 1, state: 'not_submitted', outlets: [] };
     const { ctx } = harness(payload);
-    const r = await byName('get_delivery_queue').handler({ response_format: 'detailed' }, ctx);
+    const r = await byName('get_delivery_queue').handler(
+      { release_id: 1, response_format: 'detailed' },
+      ctx,
+    );
     expect('data' in r && r.data).toEqual(payload);
+  });
+
+  it('preserves the shared canonical error fixtures', async () => {
+    const fixtures = JSON.parse(
+      readFileSync(new URL('../fixtures/delivery-status/errors.json', import.meta.url), 'utf8'),
+    ) as Record<string, { status: number; body: Record<string, unknown> }>;
+
+    for (const fixture of Object.values(fixtures)) {
+      const { ctx } = harness(fixture.body, fixture.status);
+      const result = await byName('get_delivery_queue').handler({ release_id: 123 }, ctx);
+
+      expect(result).toEqual({
+        error: {
+          code: fixture.body.error_code,
+          message: fixture.body.message,
+          status: fixture.status,
+          details: fixture.body.details,
+        },
+      });
+    }
   });
 });
 

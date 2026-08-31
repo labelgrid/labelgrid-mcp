@@ -39,6 +39,7 @@ describe('toToolResult', () => {
         suggestion: 'Fix the fields and retry.',
         errors: { field: ['y'.repeat(500_000)] },
         errors_structured: [{ field: 'field', detail: 'z'.repeat(50_000) }],
+        details: [{ context: 'w'.repeat(50_000) }],
       },
     });
     expect(r.isError).toBe(true);
@@ -51,6 +52,7 @@ describe('toToolResult', () => {
         suggestion: string;
         errors: unknown;
         errors_structured: unknown;
+        details: unknown;
       };
     };
     expect(parsed.error.code).toBe('VALIDATION_FAILED');
@@ -59,6 +61,29 @@ describe('toToolResult', () => {
     expect(parsed.error.suggestion).toBe('Fix the fields and retry.');
     expect(parsed.error.errors).toBe('[truncated]');
     expect(parsed.error.errors_structured).toBe('[truncated]');
+    expect(parsed.error.details).toBe('[truncated]');
+  });
+
+  it('keeps an oversized details-only error as valid bounded JSON', () => {
+    const r = toToolResult({
+      error: {
+        code: 'PROCESSING_ERROR',
+        message: 'The delivery status could not be processed.',
+        status: 500,
+        details: [{ context: 'x'.repeat(500_000) }],
+      },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+    const parsed = JSON.parse(r.content[0].text) as {
+      error: { code: string; message: string; status: number; details: unknown };
+    };
+    expect(parsed.error).toEqual({
+      code: 'PROCESSING_ERROR',
+      message: 'The delivery status could not be processed.',
+      status: 500,
+      details: '[truncated]',
+    });
   });
 
   it('hard-bounds an error whose own message exceeds the ceiling', () => {

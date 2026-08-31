@@ -1,0 +1,18 @@
+{
+  "release_not_accessible": {
+    "status": 404,
+    "body": {
+      "message": "The release is not accessible.",
+      "error_code": "RELEASE_NOT_ACCESSIBLE",
+      "details": []
+    }
+  },
+  "processing_error": {
+    "status": 500,
+    "body": {
+      "message": "The delivery status could not be processed.",
+      "error_code": "PROCESSING_ERROR",
+      "details": []
+    }
+  }
+}

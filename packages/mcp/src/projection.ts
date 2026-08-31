@@ -59,7 +59,17 @@ export const CONCISE_ALLOWLISTS: Record<string, readonly string[]> = {
     'message',
     'created_at',
   ],
-  get_delivery_queue: ['status', 'outlet', 'outlet_id', 'delivered_at', 'created_at', 'type'],
+  get_delivery_queue: [
+    'state',
+    'currently_live',
+    'ever_submitted',
+    'ever_delivered',
+    'outlet',
+    'operation',
+    'queue_id',
+    'updated_at',
+    'error_code',
+  ],
   query_artificial_streaming: [
     'dsp',
     'country',

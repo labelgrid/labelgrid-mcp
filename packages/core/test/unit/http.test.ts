@@ -178,6 +178,27 @@ describe('LabelGridClient error normalization', () => {
     if (!isOk(r)) expect(r.error.code).toBe('NOT_FOUND');
   });
 
+  it('passes through the public delivery status error code and details on 404', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(404, {
+        message: 'The release is not accessible.',
+        error_code: 'RELEASE_NOT_ACCESSIBLE',
+        details: [],
+      }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).get(
+      '/releases/999/delivery-status',
+    );
+    if (!isOk(r)) {
+      expect(r.error).toMatchObject({
+        code: 'RELEASE_NOT_ACCESSIBLE',
+        message: 'The release is not accessible.',
+        status: 404,
+        details: [],
+      });
+    }
+  });
+
   it('passes through a server code on 409', async () => {
     const fetchFn = vi.fn(async () =>
       jsonResponse(409, { error: { code: 'IDEMPOTENCY_IN_FLIGHT', message: 'in flight' } }),
@@ -221,6 +242,27 @@ describe('LabelGridClient error normalization', () => {
     const fetchFn = vi.fn(async () => jsonResponse(503, { message: 'boom' }));
     const r = await makeClient(fetchFn as unknown as typeof fetch).get('/me');
     if (!isOk(r)) expect(r.error.code).toBe('SERVER_ERROR');
+  });
+
+  it('passes through the public delivery status error code on 5xx', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(500, {
+        message: 'The delivery status could not be processed.',
+        error_code: 'PROCESSING_ERROR',
+        details: [],
+      }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).get(
+      '/releases/1/delivery-status',
+    );
+    if (!isOk(r)) {
+      expect(r.error).toMatchObject({
+        code: 'PROCESSING_ERROR',
+        message: 'The delivery status could not be processed.',
+        status: 500,
+        details: [],
+      });
+    }
   });
 
   it('understands all four backend error body shapes', async () => {
