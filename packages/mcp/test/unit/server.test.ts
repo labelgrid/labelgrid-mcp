@@ -218,6 +218,34 @@ describe('buildServer tool invocation', () => {
     expect(content[0].text).toContain('TOKEN_INVALID');
   });
 
+  it.each([200, 400])(
+    'returns bounded JSON for an oversized HTTP %i response without replay',
+    async (status) => {
+      const huge = '"\\\u0000'.repeat(500_000);
+      const fetchFn = vi.fn(async () =>
+        jsonResponse(status, status === 200 ? { blob: huge } : { message: huge }),
+      );
+      const client = await connect(config(), fetchFn as unknown as typeof fetch);
+      const result = await client.callTool({
+        name: 'revoke_api_token',
+        arguments: { token_id: 123 },
+      });
+      expect(result.isError).toBe(true);
+      const text = (result.content as Array<{ text: string }>)[0].text;
+      expect(text.length).toBeLessThanOrEqual(400_000);
+      const parsed = JSON.parse(text);
+      if (status === 200) {
+        expect(parsed.error.code).toBe('RESULT_TOO_LARGE');
+        expect(parsed.error.suggestion).toContain('may already have completed');
+        expect(parsed.error.suggestion).toContain('before retrying');
+      } else {
+        expect(parsed.error.status).toBe(400);
+        expect(parsed.error.message).toContain('[truncated]');
+      }
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('errors when calling a gated-off tool and never invokes its handler', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connect(config({ writes: false }), fetchFn as unknown as typeof fetch);
@@ -403,6 +431,28 @@ describe('buildServer handler exception safety', () => {
     expect(parsed.error.message).toBe('kaboom internal detail');
     // The message carries no stack trace — only the error message string.
     expect(content[0].text).not.toContain('at ');
+  });
+
+  it('bounds a thrown-handler error without replaying the handler', async () => {
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const handler = vi.fn(async () => {
+      throw new Error('"'.repeat(500_000));
+    });
+    const fetchFn = vi.fn();
+    const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, [
+      { ...throwingTool, handler },
+    ]);
+    const result = await client.callTool({ name: 'boom', arguments: {} });
+    const text = (result.content as Array<{ text: string }>)[0].text;
+    expect(result.isError).toBe(true);
+    expect(text.length).toBeLessThanOrEqual(400_000);
+    expect(JSON.parse(text).error).toMatchObject({
+      code: 'UNEXPECTED_ERROR',
+      status: 0,
+      message: expect.stringContaining('[truncated]'),
+    });
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('keeps the server working for subsequent calls after a handler throws', async () => {

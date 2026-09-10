@@ -8,20 +8,51 @@ describe('toToolResult', () => {
     expect(JSON.parse(r.content[0].text)).toEqual({ id: 1 });
   });
 
-  it('caps oversized data with a truncation wrapper under the ceiling', () => {
-    const big = { blob: 'x'.repeat(500_000) };
-    const r = toToolResult({ data: big });
-    const parsed = JSON.parse(r.content[0].text) as {
-      truncated: boolean;
-      note: string;
-      data_prefix: string;
+  it.each(['x', '"', '\\', '\n', '\u0000', '😀'])(
+    'bounds oversized data containing %j',
+    (character) => {
+      const r = toToolResult({ data: { blob: character.repeat(500_000) } });
+      expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+      expect(r.isError).toBe(true);
+      expect(JSON.parse(r.content[0].text).error).toMatchObject({
+        code: 'RESULT_TOO_LARGE',
+        message: expect.stringContaining('omitted'),
+        suggestion: expect.stringContaining('before retrying'),
+      });
+    },
+  );
+
+  it.each([399_999, 400_000, 400_001])(
+    'checks the final serialized size at %i characters',
+    (length) => {
+      const data = 'x'.repeat(length - 2);
+      const r = toToolResult({ data });
+      expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+      if (length <= 400_000) {
+        expect(r.isError).toBeUndefined();
+        expect(JSON.parse(r.content[0].text)).toBe(data);
+      } else {
+        expect(r.isError).toBe(true);
+        expect(JSON.parse(r.content[0].text).error.code).toBe('RESULT_TOO_LARGE');
+      }
+    },
+  );
+
+  it('preserves in-limit API diagnostics and retry guidance', () => {
+    const error = {
+      code: 'VALIDATION_FAILED',
+      message: 'Invalid input',
+      status: 422,
+      field: 'title',
+      suggestion: 'Fix the title.',
+      retry_after_seconds: 30,
+      errors: { title: ['Required'] },
+      errors_structured: [{ field: 'title' }],
+      details: { reason: 'Missing title' },
     };
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.note).toContain('truncated');
-    // Headroom is reserved for the wrapper keys so the whole envelope stays under 400k.
-    expect(parsed.data_prefix.length).toBe(399_000);
-    expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
-    expect(r.isError).toBeUndefined();
+    const r = toToolResult({ error });
+    expect(r.isError).toBe(true);
+    expect(JSON.parse(r.content[0].text)).toEqual({ error });
   });
 
   it('flags an error result with isError', () => {
@@ -87,8 +118,6 @@ describe('toToolResult', () => {
   });
 
   it('hard-bounds an error whose own message exceeds the ceiling', () => {
-    // Nothing to drop here (no passthroughs) — the message itself is over-limit,
-    // so the envelope is hard-sliced at the ceiling and returned as-is.
     const r = toToolResult({
       error: {
         code: 'SERVER_ERROR',
@@ -98,5 +127,63 @@ describe('toToolResult', () => {
     });
     expect(r.isError).toBe(true);
     expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+    expect(JSON.parse(r.content[0].text).error).toMatchObject({
+      code: 'SERVER_ERROR',
+      status: 500,
+      message: expect.stringMatching(/^x+.*\[truncated\]$/),
+    });
+  });
+
+  it.each(['code', 'message', 'field', 'suggestion'] as const)(
+    'bounds an escaped oversized %s',
+    (field) => {
+      const error = {
+        code: 'SERVER_ERROR',
+        message: 'Failed',
+        status: 500,
+        retry_after_seconds: 10,
+        [field]: '\u0000"\\'.repeat(500_000),
+      };
+      const r = toToolResult({ error });
+      expect(r.isError).toBe(true);
+      expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+      const parsed = JSON.parse(r.content[0].text).error;
+      expect(parsed.status).toBe(500);
+      expect(parsed.retry_after_seconds).toBe(10);
+      expect(parsed[field]).toContain('[truncated]');
+    },
+  );
+
+  it('bounds all diagnostic fields even with worst-case JSON escaping', () => {
+    const huge = '\u0000'.repeat(500_000);
+    const r = toToolResult({
+      error: {
+        code: huge,
+        message: huge,
+        status: 429,
+        field: huge,
+        suggestion: huge,
+        errors: huge,
+        errors_structured: huge,
+        details: huge,
+        retry_after_seconds: 60,
+      },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+    const parsed = JSON.parse(r.content[0].text).error;
+    expect(parsed.status).toBe(429);
+    expect(parsed.retry_after_seconds).toBe(60);
+    for (const field of [
+      'code',
+      'message',
+      'field',
+      'suggestion',
+      'errors',
+      'errors_structured',
+      'details',
+    ]) {
+      expect(parsed[field]).toContain('[truncated]');
+    }
   });
 });

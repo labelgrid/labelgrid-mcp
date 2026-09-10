@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Oversized tool responses now return a bounded `RESULT_TOO_LARGE` error instead
+  of a serialized data prefix that could exceed the 400,000-character limit.
+  Write operations may already have completed; check their state before retrying.
+- Oversized API and handler errors remain valid JSON, preserving bounded
+  diagnostic fields and explicitly marking omitted details.
+
 ### Changed
 
 - `get_delivery_queue` now requires `release_id` and returns the public API's
