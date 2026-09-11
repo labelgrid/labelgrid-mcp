@@ -45,18 +45,28 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
   if ('data' in r) {
     const text = JSON.stringify(r.data ?? null, null, 2);
     if (text.length > MAX_TOOL_TEXT) {
-      // Reserve headroom for the wrapper keys so the whole envelope, not just the
-      // prefix, stays under the ceiling.
-      const wrapped = JSON.stringify(
-        {
-          truncated: true,
-          note: 'Response truncated — use pagination or filters to narrow the request.',
-          data_prefix: text.slice(0, MAX_TOOL_TEXT - 1_000),
-        },
-        null,
-        2,
-      );
-      return { content: [{ type: 'text', text: wrapped }] };
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                error: {
+                  code: 'RESULT_TOO_LARGE',
+                  message:
+                    'Response exceeded the 400,000-character limit; response data was omitted.',
+                  status: 0,
+                  suggestion:
+                    'Use pagination or filters to narrow reads. If this was a write, it may already have completed. Check its state before retrying.',
+                },
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+        isError: true,
+      };
     }
     return { content: [{ type: 'text', text }] };
   }
@@ -64,9 +74,7 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
   if (errorText.length <= MAX_TOOL_TEXT) {
     return { content: [{ type: 'text', text: errorText }], isError: true };
   }
-  // The only unbounded fields are the verbatim API passthroughs; drop them so the
-  // envelope stays under the ceiling while the diagnostic core (code/message/
-  // status/suggestion) survives intact.
+  // Omit bulky API details first, preserving the diagnostic core when it fits.
   const bounded: ApiError = { ...r.error };
   if (bounded.errors !== undefined) bounded.errors = '[truncated]';
   if (bounded.errors_structured !== undefined) bounded.errors_structured = '[truncated]';
@@ -75,12 +83,25 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
   if (boundedText.length <= MAX_TOOL_TEXT) {
     return { content: [{ type: 'text', text: boundedText }], isError: true };
   }
-  // Even after dropping the passthroughs the envelope is over the ceiling — a
-  // hostile error whose own code/message is huge. Hard-slice the serialized text
-  // at MAX_TOOL_TEXT and return it as-is: the result is no longer valid JSON, but
-  // an over-limit hostile error forfeits pretty structure to keep the hard bound.
+  // Bound raw fields before encoding. Four string prefixes of at most 8,000 code units
+  // leave room even when JSON escaping expands each code unit to six characters.
+  const compact: ApiError = {
+    code: boundDiagnostic(bounded.code),
+    message: boundDiagnostic(bounded.message),
+    status: bounded.status,
+    field: bounded.field === undefined ? undefined : boundDiagnostic(bounded.field),
+    suggestion: bounded.suggestion === undefined ? undefined : boundDiagnostic(bounded.suggestion),
+    retry_after_seconds: bounded.retry_after_seconds,
+    errors: bounded.errors,
+    errors_structured: bounded.errors_structured,
+    details: bounded.details,
+  };
   return {
-    content: [{ type: 'text', text: boundedText.slice(0, MAX_TOOL_TEXT) }],
+    content: [{ type: 'text', text: JSON.stringify({ error: compact }, null, 2) }],
     isError: true,
   };
+}
+
+function boundDiagnostic(value: string): string {
+  return value.length > 8_000 ? `${value.slice(0, 8_000)} [truncated]` : value;
 }
