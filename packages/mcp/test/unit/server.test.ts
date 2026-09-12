@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { LabelGridClient } from '@labelgrid/core';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -6,6 +7,7 @@ import type { Config } from '../../src/config.js';
 import { buildServer } from '../../src/server.js';
 import { accountTools } from '../../src/tools/account.js';
 import { allTools } from '../../src/tools/all.js';
+import { releaseTools } from '../../src/tools/releases.js';
 import type { ToolDef } from '../../src/tools/types.js';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -207,6 +209,7 @@ describe('buildServer tool invocation', () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     expect(JSON.parse(content[0].text)).toEqual(account);
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it('returns an isError result carrying TOKEN_INVALID on a 401', async () => {
@@ -255,6 +258,197 @@ describe('buildServer tool invocation', () => {
     expect(result.isError).toBe(true);
     const content = result.content as Array<{ type: string; text: string }>;
     expect(content[0].text).toContain('not found');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe('delivery-status output contract', () => {
+  const live = JSON.parse(
+    readFileSync(new URL('../fixtures/delivery-status/live.json', import.meta.url), 'utf8'),
+  );
+
+  it('advertises an object schema only for the opted-in delivery tool', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, live));
+    const client = await connectWithTools(config(), fetchFn, allTools());
+    const { tools } = await client.listTools();
+    const typedTools = tools.filter((tool) => tool.outputSchema);
+    expect(typedTools.map((tool) => tool.name)).toEqual(['get_delivery_queue']);
+    expect(typedTools[0].outputSchema).toMatchObject({
+      type: 'object',
+      additionalProperties: true,
+      required: [
+        'release_id',
+        'state',
+        'currently_live',
+        'ever_submitted',
+        'ever_delivered',
+        'outlets',
+      ],
+      properties: {
+        outlets: {
+          type: 'array',
+          items: {
+            additionalProperties: true,
+            required: expect.arrayContaining([
+              'attention_owner',
+              'customer_action_code',
+              'action_url',
+            ]),
+          },
+        },
+      },
+    });
+  });
+
+  const removed = {
+    ...live,
+    state: 'removed',
+    currently_live: false,
+    outlets: [
+      { ...live.outlets[0], state: 'removed', customer_state: 'removed', operation: 'takedown' },
+    ],
+  };
+  const notSubmitted = {
+    ...live,
+    state: 'not_submitted',
+    currently_live: false,
+    ever_submitted: false,
+    ever_delivered: false,
+    outlets: [],
+  };
+  const actionNeeded = {
+    ...live,
+    state: 'action_needed',
+    currently_live: false,
+    outlets: [
+      {
+        ...live.outlets[0],
+        state: 'action_needed',
+        customer_state: 'action_needed',
+        attention_owner: 'customer',
+        customer_action_code: 'fix_metadata',
+        action_url: 'https://example.test/releases/123',
+        queue_id: null,
+        updated_at: null,
+        error_code: 'METADATA_INVALID',
+      },
+    ],
+  };
+
+  describe.each(['concise', 'detailed'])('%s results', (responseFormat) => {
+    it.each([
+      ['live', live],
+      ['removed but historically delivered', removed],
+      ['not submitted with no outlets', notSubmitted],
+      ['customer action with nullable queue metadata', actionNeeded],
+    ])('preserves %s in matching text and structured content', async (_name, payload) => {
+      const fetchFn = vi.fn(async () => jsonResponse(200, payload));
+      const client = await connectWithTools(config(), fetchFn, releaseTools);
+      // Also exercises the SDK client's output validator populated by tools/list.
+      await client.listTools();
+      const result = await client.callTool({
+        name: 'get_delivery_queue',
+        arguments: { release_id: 123, response_format: responseFormat },
+      });
+      const expected =
+        responseFormat === 'concise' ? { ...payload, _projection: 'concise' } : payload;
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toEqual(expected);
+      expect(JSON.parse((result.content as Array<{ text: string }>)[0].text)).toEqual(expected);
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      { ...live, currently_live: undefined },
+      { ...live, currently_live: 'true' },
+      { ...live, outlets: [{ ...live.outlets[0], operation: 'unknown' }] },
+      { ...live, outlets: [{ ...live.outlets[0], customer_action_code: undefined }] },
+    ])('refuses a response that violates the published contract', async (payload) => {
+      const fetchFn = vi.fn(async () => jsonResponse(200, payload));
+      const client = await connectWithTools(config(), fetchFn, releaseTools);
+      await client.listTools();
+      const result = await client.callTool({
+        name: 'get_delivery_queue',
+        arguments: { release_id: 123, response_format: responseFormat },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+      expect((result.content as Array<{ text: string }>)[0].text).toContain(
+        'Output validation error',
+      );
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('preserves additional detailed fields without wrapping the response', async () => {
+    const payload = {
+      ...live,
+      extra: 'additional aggregate field',
+      outlets: [{ ...live.outlets[0], extra: 'additional outlet field' }],
+    };
+    const client = await connectWithTools(
+      config(),
+      vi.fn(async () => jsonResponse(200, payload)),
+      releaseTools,
+    );
+    await client.listTools();
+    const result = await client.callTool({
+      name: 'get_delivery_queue',
+      arguments: { release_id: 123, response_format: 'detailed' },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual(payload);
+    expect(JSON.parse((result.content as Array<{ text: string }>)[0].text)).toEqual(payload);
+  });
+
+  it.each([
+    [
+      404,
+      { error_code: 'RELEASE_NOT_ACCESSIBLE', message: 'The release is not accessible.' },
+      'RELEASE_NOT_ACCESSIBLE',
+    ],
+    [
+      200,
+      { ...live, outlets: [{ ...live.outlets[0], error_code: '"'.repeat(500_000) }] },
+      'RESULT_TOO_LARGE',
+    ],
+    [400, { message: 'x'.repeat(500_000) }, 'ERROR'],
+  ])(
+    'keeps HTTP %i failures as bounded errors without structured success',
+    async (status, payload, code) => {
+      const fetchFn = vi.fn(async () => jsonResponse(status, payload));
+      const client = await connectWithTools(config(), fetchFn, releaseTools);
+      await client.listTools();
+      const result = await client.callTool({
+        name: 'get_delivery_queue',
+        arguments: { release_id: 123 },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+      const text = (result.content as Array<{ text: string }>)[0].text;
+      expect(text.length).toBeLessThanOrEqual(400_000);
+      expect(JSON.parse(text).error.code).toBe(code);
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('returns setup guidance for the typed tool without calling the API', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, live));
+    const client = await connectWithTools(
+      config({ setupMode: true, token: null }),
+      fetchFn,
+      releaseTools,
+    );
+    await client.listTools();
+    const result = await client.callTool({
+      name: 'get_delivery_queue',
+      arguments: { release_id: 123 },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(JSON.parse((result.content as Array<{ text: string }>)[0].text).error.code).toBe(
+      'NOT_CONNECTED',
+    );
     expect(fetchFn).not.toHaveBeenCalled();
   });
 });

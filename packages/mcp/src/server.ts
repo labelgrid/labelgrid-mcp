@@ -78,6 +78,7 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
         title: tool.title,
         description: tool.description,
         inputSchema: tool.inputShape,
+        outputSchema: tool.outputSchema,
         annotations: { title: tool.title, ...tool.annotations },
       },
       async (args: Record<string, unknown>): Promise<CallToolResult> => {
@@ -115,7 +116,13 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
           }) as CallToolResult;
         }
         log('info', `tool ${tool.name}`, { args: args ?? {}, duration_ms: Date.now() - startedAt });
-        return toToolResult(result) as CallToolResult;
+        const response = toToolResult(result);
+        if (tool.outputSchema && !response.isError && 'data' in result) {
+          // The SDK validates this against outputSchema before returning it.
+          // Keep errors (including RESULT_TOO_LARGE) free of success content.
+          response.structuredContent = result.data as Record<string, unknown>;
+        }
+        return response as CallToolResult;
       },
     );
   }

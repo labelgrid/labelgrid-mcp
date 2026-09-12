@@ -28,12 +28,15 @@ export type ToolDef = {
   title: string;
   description: string;
   inputShape: z.ZodRawShape;
+  /** Opted-in tools expose and validate this object contract through the SDK. */
+  outputSchema?: z.AnyZodObject;
   annotations: ToolAnnotations;
   handler: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ApiResult<unknown>>;
 };
 
 export type ToolResult = {
   content: [{ type: 'text'; text: string }];
+  structuredContent?: Record<string, unknown>;
   isError?: true;
 };
 

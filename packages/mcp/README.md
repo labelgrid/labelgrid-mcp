@@ -298,7 +298,9 @@ Leaving `LABELGRID_ENABLE_FULL_WRITES` unset is the safe default: your AI assist
 
 ## Rate limits & errors
 
-Every tool returns either the API's JSON payload or a **structured error** — never a raw protocol failure — so your assistant can reason about what went wrong. The error shape is:
+Successful tools return the API payload as JSON text, with concise projection where requested. `get_delivery_queue` also advertises an `outputSchema` and returns the same object in `structuredContent`. Its concise output preserves customer attention, recovery, and action fields. Additional detailed-response fields pass through unchanged.
+
+API failures and oversized results return `isError: true` with a JSON error in the text content and no structured success object. A delivery response that violates its output schema returns the SDK's `isError` validation message. The API error shape is:
 
 ```json
 {
