@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `delete_catalog_item` and `revoke_api_token` are now hidden by
+  default. To enable them, keep `LABELGRID_ENABLE_WRITES=true` (its default) and
+  arm full writes with `LABELGRID_ENABLE_FULL_WRITES=true` plus the exact
+  `LABELGRID_FULL_WRITES_ACK` sentence documented in the README. Either write
+  control being off disables these tools; `LABELGRID_READ_ONLY=true` still
+  overrides both. Other tool gates and CLI confirmation behavior are unchanged.
 - `get_delivery_queue` now requires `release_id` and returns the public API's
   canonical release delivery status, including aggregate state, historical
   predicates, and one current state per outlet. It no longer reads or interprets

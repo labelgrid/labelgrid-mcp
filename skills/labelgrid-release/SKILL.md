@@ -38,7 +38,7 @@ the gate.
 
 Both vehicles authenticate with a LabelGrid API token
 (`LABELGRID_API_TOKEN`; the CLI can also store it via `labelgrid auth login`). The MCP
-server has three fail-closed gates:
+server has four fail-closed gate classes:
 
 1. **Reads** — always on.
 2. **Safe writes** (`LABELGRID_ENABLE_WRITES`, on by default) — reversible, draft-stage
@@ -54,6 +54,17 @@ server has three fail-closed gates:
    ```
 
    The acknowledgment must match exactly or full writes stay off.
+
+4. **Destructive writes** — `delete_catalog_item` and `revoke_api_token` require
+   safe writes enabled **and** full writes armed with the flag and exact acknowledgment
+   above. They are hidden by default. The `catalog` or `account` toolset must also be
+   selected. Catalog deletion can permanently remove data; revoking the current token
+   immediately ends its access.
+
+`LABELGRID_READ_ONLY=true` overrides both write controls. Setting only
+`LABELGRID_ENABLE_WRITES=false` disables safe and destructive writes but leaves
+independently armed distribution tools available. These MCP gates do not change CLI
+confirmation prompts.
 
 Confirm which account your token belongs to (and see the release submission limit/quota)
 before doing anything else:
@@ -237,6 +248,10 @@ fresh submission.
   treat a missing acknowledgment as something to work around. If a full-write tool is not
   available, that is the safe default doing its job: prepare and validate everything, and
   leave the irreversible submission as a deliberate, opt-in human step.
+- **Deletion and token revocation need both write controls.** `delete_catalog_item`
+  and `revoke_api_token` additionally require `LABELGRID_ENABLE_WRITES=true`. Confirm
+  the exact entity or token with the user before invoking them; do not enable either
+  write control or use the CLI to work around the user's MCP gate configuration.
 - **Destructive CLI commands prompt.** `release distribute`, `release takedown`,
   `release confirm-review`, `catalog delete`, `asset delete`, `license delete`,
   `beatport enable`, and the other destructive commands ask for confirmation before any

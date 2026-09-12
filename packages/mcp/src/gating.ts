@@ -8,7 +8,7 @@
 
 import { type Config, defaultExcludedToolsets } from './config.js';
 
-export type Gate = 'read' | 'safe_write' | 'full_write';
+export type Gate = 'read' | 'safe_write' | 'full_write' | 'destructive_write';
 
 export function isToolEnabled(t: { gate: Gate; toolset: string }, c: Config): boolean {
   // With no explicit LABELGRID_TOOLSETS selection, the default surface applies
@@ -25,6 +25,9 @@ export function isToolEnabled(t: { gate: Gate; toolset: string }, c: Config): bo
       return c.writes;
     case 'full_write':
       return c.fullWrites;
+    case 'destructive_write':
+      // Both controls preserve the safe-write opt-out while adding full-write arming.
+      return c.writes && c.fullWrites;
     default:
       return false;
   }

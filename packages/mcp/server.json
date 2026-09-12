@@ -32,13 +32,13 @@
         },
         {
           "name": "LABELGRID_ENABLE_WRITES",
-          "description": "Enable safe writes (create/update drafts, labels, artists, and similar). Enabled by default; set to false for read-only.",
+          "description": "Enable safe writes (create/update drafts, labels, artists, and similar). Enabled by default. Setting false also disables catalog deletion and token revocation; use LABELGRID_READ_ONLY to disable every write class.",
           "isRequired": false,
           "format": "string"
         },
         {
           "name": "LABELGRID_ENABLE_FULL_WRITES",
-          "description": "Enable full writes (distribution, takedowns, immutable uploads). Disabled by default; also requires LABELGRID_FULL_WRITES_ACK.",
+          "description": "Enable full writes (distribution, takedowns, immutable uploads). Disabled by default; also requires LABELGRID_FULL_WRITES_ACK. Catalog deletion and token revocation additionally require LABELGRID_ENABLE_WRITES=true.",
           "isRequired": false,
           "format": "string"
         },

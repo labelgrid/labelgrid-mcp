@@ -3,7 +3,7 @@ import { LabelGridClient } from '@labelgrid/core';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Config } from '../../src/config.js';
+import { type Config, FULL_WRITES_ACK, loadConfig } from '../../src/config.js';
 import { buildServer } from '../../src/server.js';
 import { accountTools } from '../../src/tools/account.js';
 import { allTools } from '../../src/tools/all.js';
@@ -55,9 +55,12 @@ async function connect(cfg: Config, fetchFn: typeof fetch) {
 }
 
 describe('buildServer registration', () => {
-  it('always lists get_account and includes revoke_api_token when writes are on', async () => {
+  it('always lists get_account and includes revoke_api_token when both write gates are armed', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
-    const client = await connect(config({ writes: true }), fetchFn as unknown as typeof fetch);
+    const client = await connect(
+      config({ writes: true, fullWrites: true }),
+      fetchFn as unknown as typeof fetch,
+    );
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
     expect(names).toContain('get_account');
@@ -83,22 +86,40 @@ describe('buildServer registration', () => {
 });
 
 describe('buildServer default connected surface', () => {
-  it('exposes EXACTLY 24 tools by default (no webhooks, no full writes)', async () => {
+  it('exposes EXACTLY 22 tools by default (no webhooks, full writes or destructive writes)', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(config(), fetchFn as unknown as typeof fetch, allTools());
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
-    expect(names).toHaveLength(24);
+    expect(names).toHaveLength(22);
     // Webhooks are default-off; full writes are unarmed.
     expect(names).not.toContain('list_webhooks');
     expect(names).not.toContain('manage_webhook');
     expect(names).not.toContain('distribute_release');
     expect(names).not.toContain('upload_asset');
+    expect(names).not.toContain('delete_catalog_item');
+    expect(names).not.toContain('revoke_api_token');
     // The consolidated families are present.
     expect(names).toContain('get_account');
     expect(names).toContain('search_catalog');
     expect(names).toContain('get_release_review');
     expect(names).toContain('query_financials');
+  });
+
+  it('exposes exactly 16 read-only tools even when both write flags and the acknowledgment are set', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const cfg = loadConfig({
+      LABELGRID_API_TOKEN: 'tok',
+      LABELGRID_ENABLE_WRITES: 'true',
+      LABELGRID_ENABLE_FULL_WRITES: 'true',
+      LABELGRID_FULL_WRITES_ACK: FULL_WRITES_ACK,
+      LABELGRID_READ_ONLY: 'true',
+    });
+    const client = await connectWithTools(cfg, fetchFn as unknown as typeof fetch, allTools());
+    const { tools } = await client.listTools();
+    expect(tools).toHaveLength(16);
+    expect(tools.every((tool) => tool.annotations?.readOnlyHint === true)).toBe(true);
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('exposes the webhook pair when LABELGRID_TOOLSETS names webhooks', async () => {
@@ -145,6 +166,86 @@ describe('buildServer default connected surface', () => {
       expect(r.uri).toMatch(/^labelgrid:\/\/reference\//);
     }
   });
+});
+
+describe('buildServer destructive write controls', () => {
+  const destructiveCalls = [
+    { name: 'delete_catalog_item', arguments: { entity: 'label', id: 123 } },
+    { name: 'revoke_api_token', arguments: { token_id: 123 } },
+  ];
+
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])('enforces writes=%s, fullWrites=%s at registration', async (writes, fullWrites) => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+    const cfg = loadConfig({
+      LABELGRID_API_TOKEN: 'tok',
+      LABELGRID_ENABLE_WRITES: String(writes),
+      LABELGRID_ENABLE_FULL_WRITES: String(fullWrites),
+      LABELGRID_FULL_WRITES_ACK: FULL_WRITES_ACK,
+    });
+    const client = await connectWithTools(cfg, fetchFn as unknown as typeof fetch, allTools());
+    const { tools } = await client.listTools();
+    const names = tools.map((tool) => tool.name);
+    // Existing distribution gates remain independent of the safe-write flag.
+    expect(names.includes('distribute_release')).toBe(fullWrites);
+    for (const call of destructiveCalls) {
+      expect(names.includes(call.name)).toBe(writes && fullWrites);
+      const result = await client.callTool(call);
+      if (writes && fullWrites) {
+        expect(result.isError).toBeFalsy();
+      } else {
+        expect(result.isError).toBe(true);
+        expect((result.content as Array<{ text: string }>)[0].text).toContain('not found');
+      }
+    }
+    expect(fetchFn).toHaveBeenCalledTimes(writes && fullWrites ? 2 : 0);
+  });
+
+  it.each([undefined, 'I promise to be careful'])(
+    'does not expose destructive writes with acknowledgment %s',
+    async (ack) => {
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+      const cfg = loadConfig({
+        LABELGRID_API_TOKEN: 'tok',
+        LABELGRID_ENABLE_WRITES: 'true',
+        LABELGRID_ENABLE_FULL_WRITES: 'true',
+        LABELGRID_FULL_WRITES_ACK: ack,
+      });
+      const client = await connectWithTools(cfg, fetchFn as unknown as typeof fetch, allTools());
+      const { tools } = await client.listTools();
+      for (const call of destructiveCalls) {
+        expect(tools.map((tool) => tool.name)).not.toContain(call.name);
+        expect((await client.callTool(call)).isError).toBe(true);
+      }
+      expect(fetchFn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['writes', 'fullWrites'] as const)(
+    'rejects already registered destructive tools if %s is disabled before invocation',
+    async (flag) => {
+      const fetchFn = vi.fn(async () => jsonResponse(200, {}));
+      const cfg = config({ writes: true, fullWrites: true });
+      const client = await connectWithTools(cfg, fetchFn as unknown as typeof fetch, allTools());
+      const { tools } = await client.listTools();
+      expect(tools.map((tool) => tool.name)).toEqual(
+        expect.arrayContaining(destructiveCalls.map((call) => call.name)),
+      );
+      cfg[flag] = false;
+      for (const call of destructiveCalls) {
+        const result = await client.callTool(call);
+        expect(result.isError).toBe(true);
+        const text = (result.content as Array<{ text: string }>)[0].text;
+        expect(JSON.parse(text).error.code).toBe('TOOL_DISABLED');
+      }
+      expect(fetchFn).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('buildServer reference resources honor the toolset gate', () => {
@@ -228,7 +329,10 @@ describe('buildServer tool invocation', () => {
       const fetchFn = vi.fn(async () =>
         jsonResponse(status, status === 200 ? { blob: huge } : { message: huge }),
       );
-      const client = await connect(config(), fetchFn as unknown as typeof fetch);
+      const client = await connect(
+        config({ fullWrites: true }),
+        fetchFn as unknown as typeof fetch,
+      );
       const result = await client.callTool({
         name: 'revoke_api_token',
         arguments: { token_id: 123 },
