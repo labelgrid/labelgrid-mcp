@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40labelgrid%2Fmcp)](https://www.npmjs.com/package/@labelgrid/mcp) [![CI](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml) [![LabelGrid MCP server](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp/badges/score.svg)](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp)
 
-`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — 30 consolidated tools forming a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
+`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — 33 tools in the full catalog over the LabelGrid public API, with toolsets and write gates controlling availability. Business rules and validation stay in the API.
 
 ## Quickstart
 
@@ -282,7 +282,7 @@ The connected server has four gate classes. Each is fail-closed: a tool is only 
 
    ```bash
    LABELGRID_ENABLE_FULL_WRITES=true
-   LABELGRID_FULL_WRITES_ACK=I accept responsibility for AI-driven distribution actions
+   LABELGRID_FULL_WRITES_ACK="I accept responsibility for AI-driven distribution actions"
    ```
 
    The acknowledgment string must match exactly, or full writes stay off. When armed, the `distribution` toolset becomes available. These tools can:

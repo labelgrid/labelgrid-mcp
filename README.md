@@ -13,7 +13,7 @@ any MCP client, the full tool reference, safety gating, and configuration.
 
 | Package | What it is |
 | --- | --- |
-| [`@labelgrid/mcp`](./packages/mcp) | The MCP server — 30 consolidated tools over the LabelGrid public API. Published to npm; also ships as the `labelgrid.mcpb` one-click bundle for Claude Desktop. |
+| [`@labelgrid/mcp`](./packages/mcp) | The MCP server — 33 tools in the full catalog over the LabelGrid public API; configuration controls which are available. Published to npm; also ships as the `labelgrid.mcpb` one-click bundle for Claude Desktop. |
 | [`@labelgrid/cli`](./packages/cli) | The `labelgrid` command-line tool — the same API surface for terminals and scripts: catalog, releases, files, analytics, royalties, webhooks, and distribution, with `--json` output for pipelines. |
 | [`@labelgrid/core`](./packages/core) | The shared API client: HTTP transport with structured errors, presigned-URL uploads, content-type allowlists, the catalog-entity registry, and redacting logging. Used by every LabelGrid tool built on the public API. |
 

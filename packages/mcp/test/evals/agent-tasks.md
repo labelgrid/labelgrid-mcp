@@ -37,7 +37,7 @@ Neither proves that every client or model behaves the same way.
 ## Recorded local baseline and guidance check — 2026-09-12
 
 Baseline: `896e63d`, after the result-size fixes, before the guidance edits. Candidate:
-the guidance change introducing this document. Node 22, SDK 1.29.0, in-memory SDK client,
+the guidance change introducing this document. Node 26.5.1, SDK 1.29.0, in-memory SDK client,
 mocked `LabelGridClient.fetchFn`, no API credentials or network requests. These were
 scripted tool calls, not an LLM choosing tools. The same temporary local driver and
 inputs ran before and after the guidance change; it added no dependencies or permanent
@@ -83,6 +83,27 @@ tool, and the skill explains unavailable QC and oversized-write recovery. A redu
 in agent mistakes or latency has not been established. Before adding typed CRUD or a
 new readiness tool, an evaluator should run controlled E2/E3 or E4 trials and record
 repeated failures that the existing operations and guidance cannot resolve.
+
+## Integrated candidate verification — 2026-09-12
+
+The combined guidance, output-contract and destructive-gate candidate was checked with
+634 unit tests on both Node 20.20.2 and Node 22.23.2. The scripted E1–E8 flows also
+passed on Node 22 with a mocked API. E5 now uses the valid `removed` aggregate/outlet
+vocabulary for its synthetic history case; E8 verifies that attempted default delete
+and revoke calls make no API requests. The unit suite separately covers all write-flag
+combinations, read-only override, acknowledgment requirements, and call-time gating.
+
+| Surface | Tools | Input-definition estimate | Output-schema estimate |
+| --- | ---: | ---: | ---: |
+| Default | 22 | 5,889 | 380 |
+| Read-only | 16 | 4,444 | 380 |
+| Full | 33 | 8,116 / 8,300 | 380 |
+| Catalog only (default write flags) | 6 | 1,646 | 0 |
+
+Isolated npm and extracted desktop-bundle stdio smoke checks pass on Node 20 and 22:
+setup refusal, discovery, reference reads, delivery structured/text agreement, bounded
+invalid-output errors, and one oversized draft write without replay. These checks use
+synthetic data and do not establish desktop UI compatibility or agent task performance.
 
 ## Client/model results to fill in
 

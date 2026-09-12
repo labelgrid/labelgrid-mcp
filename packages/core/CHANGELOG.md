@@ -10,6 +10,12 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-09-12
+
+### Changed
+
+- Catalog field guidance includes nested artist, title, and contributor examples.
+
 ## [0.2.3] - 2026-09-12
 
 ### Changed
