@@ -118,7 +118,19 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
         log('info', `tool ${tool.name}`, { args: args ?? {}, duration_ms: Date.now() - startedAt });
         const response = toToolResult(result);
         if (tool.outputSchema && !response.isError && 'data' in result) {
-          // The SDK validates this against outputSchema before returning it.
+          // Keep schema failures in our bounded JSON error path: the SDK's
+          // diagnostic text can grow with every invalid field in the response.
+          const validation = await tool.outputSchema.safeParseAsync(result.data);
+          if (!validation.success) {
+            return toToolResult({
+              error: {
+                code: 'INVALID_TOOL_OUTPUT',
+                message: `The API response does not match the output contract for "${tool.name}".`,
+                status: 0,
+              },
+            }) as CallToolResult;
+          }
+          // The SDK also validates this against outputSchema before returning it.
           // Keep errors (including RESULT_TOO_LARGE) free of success content.
           response.structuredContent = result.data as Record<string, unknown>;
         }

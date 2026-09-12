@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `get_delivery_queue` advertises the public delivery-status output schema and
-  returns matching structured content alongside its existing JSON text. Successful
-  results are validated; API, setup, and oversized-result errors retain
-  their existing error behavior.
+  returns matching structured content alongside its existing JSON text. Invalid
+  output returns a bounded `INVALID_TOOL_OUTPUT` JSON error; API, setup, and
+  oversized-result errors retain their existing error behavior.
 
 ### Fixed
 

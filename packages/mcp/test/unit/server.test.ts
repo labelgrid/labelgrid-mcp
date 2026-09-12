@@ -467,6 +467,8 @@ describe('delivery-status output contract', () => {
       { ...live, currently_live: 'true' },
       { ...live, outlets: [{ ...live.outlets[0], operation: 'unknown' }] },
       { ...live, outlets: [{ ...live.outlets[0], customer_action_code: undefined }] },
+      // SDK diagnostics for this small response would exceed the 400K ceiling.
+      { ...live, outlets: Array.from({ length: 200 }, () => ({})) },
     ])('refuses a response that violates the published contract', async (payload) => {
       const fetchFn = vi.fn(async () => jsonResponse(200, payload));
       const client = await connectWithTools(config(), fetchFn, releaseTools);
@@ -477,9 +479,13 @@ describe('delivery-status output contract', () => {
       });
       expect(result.isError).toBe(true);
       expect(result.structuredContent).toBeUndefined();
-      expect((result.content as Array<{ text: string }>)[0].text).toContain(
-        'Output validation error',
-      );
+      const text = (result.content as Array<{ text: string }>)[0].text;
+      expect(text.length).toBeLessThanOrEqual(400_000);
+      expect(JSON.parse(text).error).toEqual({
+        code: 'INVALID_TOOL_OUTPUT',
+        message: 'The API response does not match the output contract for "get_delivery_queue".',
+        status: 0,
+      });
       expect(fetchFn).toHaveBeenCalledTimes(1);
     });
   });

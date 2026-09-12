@@ -304,7 +304,7 @@ The default connected surface contains 22 tools. With default toolsets, read-onl
 
 Successful tools return the API payload as JSON text, with concise projection where requested. `get_delivery_queue` also advertises an `outputSchema` and returns the same object in `structuredContent`. Its concise output preserves customer attention, recovery, and action fields. Additional detailed-response fields pass through unchanged.
 
-API failures and oversized results return `isError: true` with a JSON error in the text content and no structured success object. A delivery response that violates its output schema returns the SDK's `isError` validation message. The API error shape is:
+API failures and oversized results return `isError: true` with a JSON error in the text content and no structured success object. A delivery response that violates its output schema returns a bounded `INVALID_TOOL_OUTPUT` JSON error. The API error shape is:
 
 ```json
 {
