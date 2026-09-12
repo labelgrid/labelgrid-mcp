@@ -75,7 +75,7 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     path: '/releases',
     filtersDoc: 'release: label_id, is_live (1 = live only), barcode_number (UPC/EAN), cat.',
     fieldsDoc:
-      'release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs).',
+      'release — required on create: content_type, label_id, artists [{artist_id, artistic_role:"MainArtist"}], titles [{iso_code:"en", text}], cat (catalog number), artwork_ai_usage, primary_genre_id; optional dates, copyright lines, genres, outlet URLs.',
     deleteNote: 'release: only a never-submitted draft can be deleted.',
     acceptsDeleteReplacement: false,
   },
@@ -83,7 +83,7 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     path: '/tracks',
     filtersDoc: 'track: release_id, isrc.',
     fieldsDoc:
-      'track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more.',
+      'track — required on create: release_id, disc, track_num, composition_type, artists (as release), audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors [{roles:{Producer:true}, ai_contribution:"none"}], recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles (as release), isrc, iswc, writers, publishers, splits.',
     deleteNote: 'track: refused once the release is no longer an editable draft.',
     acceptsDeleteReplacement: false,
   },

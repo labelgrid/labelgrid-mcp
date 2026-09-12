@@ -11,8 +11,8 @@ API, and — just as importantly — tells you **which vehicle to reach for at e
 LabelGrid ships two tools over the same API surface (both thin wrappers — every rule
 and validation lives on the server, so the two behave identically):
 
-- **`@labelgrid/mcp`** — the Model Context Protocol server. 30 consolidated tools your
-  AI client calls directly. Best for reasoning steps: drafting metadata, reading
+- **`@labelgrid/mcp`** — the Model Context Protocol server. 33 tools in the full catalog;
+  the configured toolsets and write gates determine which are available. Best for reasoning steps: drafting metadata, reading
   validation output, inspecting review issues.
 - **`@labelgrid/cli`** — the `labelgrid` command-line tool. The same API from a shell,
   with `--json` for pipelines. Best for moving file bytes and for batch/CI work.
@@ -38,7 +38,7 @@ the gate.
 
 Both vehicles authenticate with a LabelGrid API token
 (`LABELGRID_API_TOKEN`; the CLI can also store it via `labelgrid auth login`). The MCP
-server has three fail-closed gates:
+server has four fail-closed gate classes:
 
 1. **Reads** — always on.
 2. **Safe writes** (`LABELGRID_ENABLE_WRITES`, on by default) — reversible, draft-stage
@@ -54,6 +54,17 @@ server has three fail-closed gates:
    ```
 
    The acknowledgment must match exactly or full writes stay off.
+
+4. **Destructive writes** — `delete_catalog_item` and `revoke_api_token` require
+   safe writes enabled **and** full writes armed with the flag and exact acknowledgment
+   above. They are hidden by default. The `catalog` or `account` toolset must also be
+   selected. Catalog deletion can permanently remove data; revoking the current token
+   immediately ends its access.
+
+`LABELGRID_READ_ONLY=true` overrides both write controls. Setting only
+`LABELGRID_ENABLE_WRITES=false` disables safe and destructive writes but leaves
+independently armed distribution tools available. These MCP gates do not change CLI
+confirmation prompts.
 
 Confirm which account your token belongs to (and see the release submission limit/quota)
 before doing anything else:
@@ -77,6 +88,13 @@ territory, outlet). Do this first so metadata is valid on the first write.
   `search_catalog` (`entity: 'label'` / `'artist'`), or CLI
   `labelgrid catalog search --type label` / `--type artist`.
 
+For an existing release, use `search_catalog` with `entity: 'release'` and
+`filters: { cat: 'CAT001' }` or `filters: { barcode_number: '<UPC/EAN>' }`. Keep UPC/EAN
+values as strings to preserve leading zeros. Release title search is not a documented
+filter. Read the returned ID with `get_catalog_item`; request `response_format: 'detailed'`
+when inspecting nested metadata that concise mode may omit. Follow `meta`/`links` pagination
+with `page` and `per_page`; a first page without a match is not an exhaustive search.
+
 ### Step 2 — Create the draft release
 
 A release is created in **DRAFT** state; you add tracks to it next.
@@ -91,6 +109,27 @@ A release is created in **DRAFT** state; you add tracks to it next.
 
 Capture the returned release `id` — every later step needs it.
 
+Example MCP arguments, using the nested shapes from the draft lifecycle contract test.
+The IDs are illustrative: replace them with resolved account/reference IDs, use the actual
+metadata and AI-use declarations, and choose the intended release date. This is a draft
+payload, not evidence that the release is ready to distribute.
+
+```json
+{
+  "entity": "release",
+  "fields": {
+    "content_type": "Single",
+    "label_id": 10,
+    "cat": "CAT001",
+    "artwork_ai_usage": "none",
+    "primary_genre_id": 20,
+    "release_date": "2026-10-01",
+    "artists": [{ "artist_id": 30, "artistic_role": "MainArtist" }],
+    "titles": [{ "iso_code": "en", "text": "Example Release" }]
+  }
+}
+```
+
 ### Step 3 — Add each track
 
 One call per track, against the release id from Step 2.
@@ -102,6 +141,31 @@ One call per track, against the release id from Step 2.
   `titles`, `isrc`, `iswc`, `writers`, `publishers`, `splits`, and more. `idempotency_key`
   is honored for tracks.
 - CLI: `labelgrid catalog create --type track --fields '<json>'`.
+
+Example MCP arguments for one track. Replace `release_id` with the created draft ID;
+resolve artist, language and contributor-role values for the actual credits. Contributor
+`roles` is an object of role flags, not a string or an array. Add the real credits and
+other fields required by the API for this track; the example only illustrates the shape.
+
+```json
+{
+  "entity": "track",
+  "fields": {
+    "release_id": 123,
+    "disc": 1,
+    "track_num": 1,
+    "composition_type": "original",
+    "audio_ai_usage": "none",
+    "composition_ai_usage": "none",
+    "commercial_samples": "no",
+    "audio_language": "en",
+    "recording_country": "US",
+    "artists": [{ "artist_id": 30, "artistic_role": "MainArtist" }],
+    "titles": [{ "iso_code": "en", "text": "Example Track" }],
+    "contributors": [{ "roles": { "Producer": true }, "ai_contribution": "none" }]
+  }
+}
+```
 
 ### Step 4 — Upload audio and artwork
 
@@ -146,9 +210,13 @@ Fix any problems (Step 6 below), then re-run validate until it is clean.
 Preflight QC is an optional add-on. If the account has it, review the customer-facing
 quality report before confirming the release.
 
-- MCP: `get_release_review` with `view: 'quality_report'`. Re-run the checks with
-  `run_release_checks` (`check: 'refresh_quality_report'`) — the server applies an hourly
-  refresh budget. Without the add-on the API returns a 403, surfaced verbatim.
+- MCP: `get_release_review` with `view: 'quality_report'`; request
+  `response_format: 'detailed'` when assessing fields omitted from concise mode.
+  Without the add-on the API returns a 403, surfaced verbatim. Missing or denied QC
+  information is unavailable evidence, not a passing quality report. If a fresh report
+  is needed, request it deliberately with `run_release_checks`
+  (`check: 'refresh_quality_report'`); the server applies an hourly refresh budget.
+  Do not refresh automatically just because the report is missing or denied.
 - CLI: `labelgrid review quality-report --release <release-id>` (add `--refresh` to re-run
   the checks first).
 - If Preflight QC placed the release **on hold**, accept it with `confirm_review` (MCP,
@@ -172,11 +240,16 @@ The server enforces the account's weekly submission limit.
 
 ### Step 8 — Track delivery
 
-Watch the per-outlet delivery pipeline (statuses such as pending review, processing,
-scheduled, complete, error).
+Read the API's canonical current state and delivery history for the release.
 
-- MCP: `get_delivery_queue` — one entry per (release, outlet); filter by `release_id`,
-  `outlet_id`, or `status`.
+- MCP: `get_delivery_queue` with the required `release_id`; it accepts
+  `response_format`, but no `outlet_id` or `status` filters. Interpret `state`,
+  `currently_live`, `ever_submitted`, `ever_delivered` and the current `outlets` states.
+  `ever_delivered: true` does not imply `currently_live: true`, for example after a
+  takedown. The API interprets queue history; do not reconstruct current status from
+  old queue attempts. An outlet's `customer_state` alone does not imply customer action:
+  require `attention_owner: 'customer'` and non-null `customer_action_code` and `action_url`
+  before presenting its customer action.
 - The CLI has no delivery-queue command — use the `get_delivery_queue` MCP tool for this
   read.
 
@@ -194,6 +267,20 @@ Read `errors_structured` from `run_release_checks` (`check: 'validate'`), then m
 Drafts are freely editable. Once a release is submitted or distributed some fields lock —
 changing one returns a 403 with code `RELEASE_LOCKED_FIELDS` naming exactly which fields
 cannot change.
+
+For a 422 create/update failure, read the returned `error.errors` field map and any
+`error.errors_structured` diagnostics. For example, if only `recording_country` is invalid,
+correct that track with `fields: { recording_country: 'US' }` after confirming its actual
+country. Preserve unrelated metadata and repeat validation.
+
+### Results that are too large
+
+`RESULT_TOO_LARGE` means the tool omitted a response it could not return within its
+400,000-character text limit. Narrow a read with filters, pagination or concise mode.
+For a write, the API operation may already have succeeded: inspect the resource or its
+status before deciding whether to retry. An oversized response does not mean a write
+failed, and the MCP server does not replay it. Retain the same idempotency key for any
+retry of a release/track create or distribution call whose outcome remains unobserved.
 
 ### Review issues after submission
 
@@ -237,6 +324,10 @@ fresh submission.
   treat a missing acknowledgment as something to work around. If a full-write tool is not
   available, that is the safe default doing its job: prepare and validate everything, and
   leave the irreversible submission as a deliberate, opt-in human step.
+- **Deletion and token revocation need both write controls.** `delete_catalog_item`
+  and `revoke_api_token` additionally require `LABELGRID_ENABLE_WRITES=true`. Confirm
+  the exact entity or token with the user before invoking them; do not enable either
+  write control or use the CLI to work around the user's MCP gate configuration.
 - **Destructive CLI commands prompt.** `release distribute`, `release takedown`,
   `release confirm-review`, `catalog delete`, `asset delete`, `license delete`,
   `beatport enable`, and the other destructive commands ask for confirmation before any

@@ -9,6 +9,11 @@
       "outlet": "spotify",
       "state": "delivered",
       "operation": "delivery",
+      "customer_state": "delivered",
+      "attention_owner": "none",
+      "recovery_state": "none",
+      "customer_action_code": null,
+      "action_url": null,
       "queue_id": 456,
       "updated_at": "2026-08-21T12:00:00+00:00",
       "error_code": null

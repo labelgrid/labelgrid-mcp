@@ -3,7 +3,7 @@
  *
  * Only tools that pass {@link isToolEnabled} are registered. Each handler is
  * wrapped so it: (1) re-checks its gate at call time (defense in depth — the
- * registration filter is the first line), (2) runs the one-call handler, (3)
+ * registration filter is the first line), (2) runs the tool handler, (3)
  * logs the tool name, redacted args and duration to stderr, and (4) shapes the
  * result via {@link toToolResult} (API errors become isError results, never
  * protocol errors).
@@ -78,6 +78,7 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
         title: tool.title,
         description: tool.description,
         inputSchema: tool.inputShape,
+        outputSchema: tool.outputSchema,
         annotations: { title: tool.title, ...tool.annotations },
       },
       async (args: Record<string, unknown>): Promise<CallToolResult> => {
@@ -115,7 +116,25 @@ export function buildServer(config: Config, client: LabelGridClient, tools: Tool
           }) as CallToolResult;
         }
         log('info', `tool ${tool.name}`, { args: args ?? {}, duration_ms: Date.now() - startedAt });
-        return toToolResult(result) as CallToolResult;
+        const response = toToolResult(result);
+        if (tool.outputSchema && !response.isError && 'data' in result) {
+          // Keep schema failures in our bounded JSON error path: the SDK's
+          // diagnostic text can grow with every invalid field in the response.
+          const validation = await tool.outputSchema.safeParseAsync(result.data);
+          if (!validation.success) {
+            return toToolResult({
+              error: {
+                code: 'INVALID_TOOL_OUTPUT',
+                message: `The API response does not match the output contract for "${tool.name}".`,
+                status: 0,
+              },
+            }) as CallToolResult;
+          }
+          // The SDK also validates this against outputSchema before returning it.
+          // Keep errors (including RESULT_TOO_LARGE) free of success content.
+          response.structuredContent = result.data as Record<string, unknown>;
+        }
+        return response as CallToolResult;
       },
     );
   }

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40labelgrid%2Fmcp)](https://www.npmjs.com/package/@labelgrid/mcp) [![CI](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/labelgrid/labelgrid-mcp/actions/workflows/ci.yml) [![LabelGrid MCP server](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp/badges/score.svg)](https://glama.ai/mcp/servers/@labelgrid/labelgrid-mcp)
 
-`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — 30 consolidated tools forming a thin, typed wrapper over the LabelGrid public API, so every rule and validation stays on the server.
+`@labelgrid/mcp` — the official [Model Context Protocol](https://modelcontextprotocol.io) server for [LabelGrid](https://labelgrid.com), the music distribution platform. Point Claude Desktop, Claude Code, Cursor, or any MCP client at your own LabelGrid account and manage your music catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language — 33 tools in the full catalog over the LabelGrid public API, with toolsets and write gates controlling availability. Business rules and validation stay in the API.
 
 ## Quickstart
 
@@ -84,8 +84,8 @@ All configuration is via environment variables in your client config.
 | --- | --- | --- |
 | `LABELGRID_API_TOKEN` | — | **Required.** Your API token. |
 | `LABELGRID_API_URL` | production API | Override the API base URL. |
-| `LABELGRID_ENABLE_WRITES` | `true` | Safe writes (create/update drafts, labels, artists, …). Set `false` for reads only. |
-| `LABELGRID_ENABLE_FULL_WRITES` | `false` | Arm full writes — see [Safety model](#safety-model). Also requires the acknowledgment below. |
+| `LABELGRID_ENABLE_WRITES` | `true` | Safe writes (create/update drafts, labels, artists, …). Setting `false` also disables catalog deletion and token revocation; use `LABELGRID_READ_ONLY` to disable every write class. |
+| `LABELGRID_ENABLE_FULL_WRITES` | `false` | Arm full writes — see [Safety model](#safety-model). Also requires the acknowledgment below. Catalog deletion and token revocation additionally require safe writes enabled. |
 | `LABELGRID_FULL_WRITES_ACK` | — | Must equal the exact acknowledgment sentence to arm full writes. |
 | `LABELGRID_READ_ONLY` | `false` | Force reads only; overrides both write flags. |
 | `LABELGRID_TOOLSETS` | all except `webhooks` | Comma-separated subset of toolsets to expose. |
@@ -113,7 +113,7 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 | --- | --- | --- |
 | `get_account` | read | Read the authenticated LabelGrid account. Pick ONE view with `view`: `profile` returns the account profile — including the release submission limit/quota and terms-acceptance status — use it to confirm which account your API token belongs to before making other calls; `balance` returns your accounting summary — current balance and related account-level financial totals. |
 | `get_rate_limit` | read | The account’s API rate budget per category (read, write, export, analytics): ceiling, remaining, and window reset. Every token on the account shares one budget; a null ceiling means none applies. Free to call — use it to pace requests and to recover from a 429. |
-| `revoke_api_token` | write | Revoke a LabelGrid API token. Pass token_id to revoke a specific token; omit it to revoke the token currently in use. WARNING: revoking the current token immediately ends this session — the server loses access and stops working until you configure a new token. |
+| `revoke_api_token` | destructive-write | Revoke a LabelGrid API token. Requires safe writes enabled and full writes armed. Pass token_id to revoke a specific token; omit it to revoke the token currently in use. WARNING: revoking the current token immediately ends this session — the server loses access and stops working until you configure a new token. |
 
 ### Reference data `reference`
 
@@ -127,9 +127,9 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 | --- | --- | --- |
 | `search_catalog` | read | List catalog entities of one kind, paginated. `filters` takes the endpoint’s own filter names, passed through verbatim — label: no documented filters. artist: artist_name. writer: name, ipi. publisher: name, ipi. release: label_id, is_live (1 = live only), barcode_number (UPC/EAN), cat. track: release_id, isrc. Use get_catalog_item for full detail. |
 | `get_catalog_item` | read | Retrieve one catalog entity by id, with full detail (e.g. a release’s metadata and track listing, a track’s contributors and royalty splits, a writer’s PRO/IPI). |
-| `create_catalog_item` | write | Create a catalog entity: pass its attributes in `fields` — the API owns all validation. Required and common fields per entity: label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base. artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs. writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi). publisher — required: name; optional: ipi, pro, isni, controlled_publisher. release — required on create: content_type, label_id, artists, titles, cat (catalog number), artwork_ai_usage, primary_genre_id; many optional fields (dates, copyright lines, genres, per-outlet URLs). track — required on create: release_id, disc, track_num, composition_type, artists, audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors, and recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles, isrc, iswc, writers, publishers, splits, and more. A release is created in DRAFT state — add tracks, then run the release checks before distributing. |
+| `create_catalog_item` | write | Create a catalog entity: pass its attributes in `fields` — the API owns all validation. Required and common fields per entity: label — required: name, default_email; optional: support email, website/platform URLs, default copyright lines, isrc_base. artist — required: artist_name; optional: full_name, email, location, bios, isni, default_language, platform profile URLs. writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi). publisher — required: name; optional: ipi, pro, isni, controlled_publisher. release — required on create: content_type, label_id, artists [{artist_id, artistic_role:"MainArtist"}], titles [{iso_code:"en", text}], cat (catalog number), artwork_ai_usage, primary_genre_id; optional dates, copyright lines, genres, outlet URLs. track — required on create: release_id, disc, track_num, composition_type, artists (as release), audio_ai_usage, composition_ai_usage, commercial_samples, audio_language, contributors [{roles:{Producer:true}, ai_contribution:"none"}], recording_country (ISO 3166-1 alpha-2, e.g. "US"); optional: titles (as release), isrc, iswc, writers, publishers, splits. A release is created in DRAFT state — add tracks, then run the release checks before distributing. |
 | `update_catalog_item` | write | Update a catalog entity: supply only the fields to change in `fields` (same field sets as create_catalog_item). Once a release is submitted or distributed, some release and track fields are locked — changing one returns a 403 with code RELEASE_LOCKED_FIELDS naming exactly which fields cannot change. |
-| `delete_catalog_item` | write | Delete a catalog entity. The API refuses deletes that would orphan data — label: refused while the label still has releases — remove or reassign its releases first. artist: refused while still referenced by releases or tracks. writer: refused while still referenced by tracks or artists, unless replace_with reassigns those credits. publisher: refused while still referenced by tracks or label default publishers, unless replace_with reassigns those credits. release: only a never-submitted draft can be deleted. track: refused once the release is no longer an editable draft. `replace_with` — writer and publisher only — is the id inheriting those credits; a 422 REPLACEMENT_UNAVAILABLE means nothing was deleted. |
+| `delete_catalog_item` | destructive-write | Delete a catalog entity. Requires safe writes enabled and full writes armed. The API refuses deletes that would orphan data — label: refused while the label still has releases — remove or reassign its releases first. artist: refused while still referenced by releases or tracks. writer: refused while still referenced by tracks or artists, unless replace_with reassigns those credits. publisher: refused while still referenced by tracks or label default publishers, unless replace_with reassigns those credits. release: only a never-submitted draft can be deleted. track: refused once the release is no longer an editable draft. `replace_with` — writer and publisher only — is the id inheriting those credits; a 422 REPLACEMENT_UNAVAILABLE means nothing was deleted. |
 | `upload_image` | write | Upload a label image (logo, dark-mode logo, or background) or an artist photo from a local image file, per `target`. |
 | `get_asset` | read | Read a track or release asset. Valid combinations: (1) mode='info' + parent='track' + asset stereo\|dolby\|lyrics — file metadata (not the bytes) incl. processing state. (2) mode='info' + parent='release' + asset square\|tall — motion-artwork (animated cover) video metadata. (3) mode='download_url' + parent='track' + asset audio_16\|audio_24\|audio_32 (WAV master) or audio_preview_full\|audio_preview_clip (MP3 preview) — returns { download_url, expires_in }, a signed URL that expires roughly 10 minutes after issue; fetch it directly — do not send your API token to it. Any other combination is refused. |
 
@@ -274,7 +274,7 @@ Version 0.3.0 is a **breaking release**: the 83 per-endpoint tools were consolid
 
 ## Safety model
 
-The server has three gates. Each is fail-closed: a tool is only registered — and only callable — when its gate is armed.
+The connected server has four gate classes. Each is fail-closed: a tool is only registered — and only callable — when its gate is armed and its toolset is selected. Setup mode lists tools for discovery, but they cannot access the API until a token is configured.
 
 1. **Reads** — always on. Listing and fetching your catalog, analytics, statements, and so on.
 2. **Safe writes** (`LABELGRID_ENABLE_WRITES`, on by default) — reversible, draft-stage changes: creating and editing draft releases and tracks, labels, artists, writers, publishers, webhooks, landing pages, and notes. Set `LABELGRID_ENABLE_WRITES=false` (or `LABELGRID_READ_ONLY=true`) to turn these off.
@@ -282,7 +282,7 @@ The server has three gates. Each is fail-closed: a tool is only registered — a
 
    ```bash
    LABELGRID_ENABLE_FULL_WRITES=true
-   LABELGRID_FULL_WRITES_ACK=I accept responsibility for AI-driven distribution actions
+   LABELGRID_FULL_WRITES_ACK="I accept responsibility for AI-driven distribution actions"
    ```
 
    The acknowledgment string must match exactly, or full writes stay off. When armed, the `distribution` toolset becomes available. These tools can:
@@ -294,11 +294,17 @@ The server has three gates. Each is fail-closed: a tool is only registered — a
    - confirm a held release into review,
    - request one-time Beatport onboarding for a label.
 
-Leaving `LABELGRID_ENABLE_FULL_WRITES` unset is the safe default: your AI assistant can prepare and validate everything, but the irreversible submission stays a deliberate, opt-in step.
+4. **Destructive writes** — `delete_catalog_item` and `revoke_api_token` require **both** safe writes enabled and full writes armed. Keep `LABELGRID_ENABLE_WRITES=true` (its default), set the full-writes flag and acknowledgment above, and select the applicable `catalog` or `account` toolset. Catalog deletion can permanently remove data; revoking the current token immediately ends its access. These tools are hidden by default.
+
+`LABELGRID_READ_ONLY=true` disables every write class and overrides both enable flags. Setting only `LABELGRID_ENABLE_WRITES=false` disables safe and destructive writes; independently armed distribution tools remain available.
+
+The default connected surface contains 22 tools. With default toolsets, read-only mode contains 16; enabling both write controls and explicitly selecting all eight toolsets exposes all 33. Leaving `LABELGRID_ENABLE_FULL_WRITES` unset lets your assistant create and edit drafts while distribution, catalog deletion, and token revocation remain deliberate opt-in actions.
 
 ## Rate limits & errors
 
-Every tool returns either the API's JSON payload or a **structured error** — never a raw protocol failure — so your assistant can reason about what went wrong. The error shape is:
+Successful tools return the API payload as JSON text, with concise projection where requested. `get_delivery_queue` also advertises an `outputSchema` and returns the same object in `structuredContent`. Its concise output preserves customer attention, recovery, and action fields. Additional detailed-response fields pass through unchanged.
+
+API failures and oversized results return `isError: true` with a JSON error in the text content and no structured success object. A delivery response that violates its output schema returns a bounded `INVALID_TOOL_OUTPUT` JSON error. The API error shape is:
 
 ```json
 {
@@ -317,7 +323,7 @@ Common codes: `TOKEN_INVALID` (401 — check your token), `FORBIDDEN` (403 — p
 
 ## Contributing
 
-Issues and pull requests are welcome. An API-coverage drift check runs in CI against a committed snapshot of the public API document and fails when the snapshot gains an endpoint this server does not expose (refresh the snapshot with `node scripts/fetch-openapi.mjs`). This repo uses:
+Issues and pull requests are welcome. The API-coverage drift check loads the public API document at runtime and compares it with `src/coverage.ts`. Every endpoint needs either coverage or an intentional exclusion with a reason; an API endpoint does not automatically need an MCP tool. The check also flags stale entries. For offline checks, set `OPENAPI_FIXTURE` to a local copy kept outside the repository; `LABELGRID_OPENAPI_URL` selects another document URL. This repo uses:
 
 - **TypeScript** (strict ESM), Node 20+, with `@modelcontextprotocol/sdk` and `zod` as the only runtime dependencies.
 - **[Biome](https://biomejs.dev)** for lint + format (`npm run lint`).
@@ -332,16 +338,20 @@ npm test             # unit tests
 npm run lint         # biome
 npm run leak-guard   # repository hygiene scan
 npm run gen-docs     # regenerate the tool table above (after build)
+npm run measure-tokens # default, read-only, full and catalog-only surfaces
+npm run check-coverage # public API document vs coverage/exclusions (network read)
 ```
 
-Every tool is a thin declaration — one HTTP call plus response shaping, no client-side business logic. Please keep it that way: validation and rules belong on the server. The tool table in this README is generated (`npm run gen-docs`); edit tool descriptions in `src/tools/`, not the table.
+Design tools around a demonstrated user task. Reuse shared API operations and compose a bounded sequence when the task calls for it, as `upload_asset` already does. Validation and business rules belong in the API. The tool table above is generated (`npm run gen-docs`); edit tool descriptions in `src/tools/` or shared catalog field guidance in `../core/src/entities.ts`.
+
+Before adding a workflow tool or broadening schemas, compare the existing tools on the [manual agent tasks](test/evals/agent-tasks.md). Record actual client/model results separately from mocked contract checks. `measure-tokens` keeps the full-catalog input-definition budget at 8,300 estimated tokens and reports output schemas separately. Its character-based estimate excludes responses, instructions and annotations; it is not a model's billed token count.
 
 ## Legal notices
 
 These disclosures are also surfaced at runtime: in the MCP `instructions` field your client receives on initialize, and on stderr at startup. The text below mirrors the runtime constants in `src/legal.ts`.
 
 - **Summary.** This software is provided AS-IS, without warranty of any kind, express or implied. By using it you accept sole responsibility for your use of the LabelGrid API and for every action taken by any AI client or agent you connect to this server, including write operations against your LabelGrid account. Your use of the API through this server is governed by the LabelGrid API Terms of Service and Acceptable Use Policy. This server does not bypass server-side protections such as rate limits, plan entitlements, or terms enforcement. See [LICENSE](./LICENSE) (MIT).
-- **Full writes.** When full writes are armed: distribution submissions, takedowns, and immutable file uploads initiated by an AI agent have real, potentially irreversible consequences for your releases on streaming platforms and stores. By setting the `LABELGRID_FULL_WRITES_ACK` acknowledgment variable you accepted that all such actions are your sole responsibility.
+- **Full writes.** When full writes are armed: distribution submissions, takedowns, and immutable file uploads initiated by an AI agent have real, potentially irreversible consequences for your releases on streaming platforms and stores. When safe writes are also enabled, catalog deletion and API token revocation are available; these can permanently remove catalog data or immediately end token access. By setting the `LABELGRID_FULL_WRITES_ACK` acknowledgment variable you accepted that all such actions are your sole responsibility.
 - **Data handling.** This server transmits your LabelGrid catalogue and account data to the AI client you configure. Choosing that client, and disclosing that data flow where required, is your responsibility.
 
 ## License

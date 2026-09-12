@@ -91,6 +91,37 @@ describe('isToolEnabled full writes', () => {
       ),
     ).toBe(false);
   });
+
+  it('keeps full-write tools available when safe writes are disabled', () => {
+    expect(
+      isToolEnabled(
+        tool('full_write', 'distribution'),
+        config({ writes: false, fullWrites: true }),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('isToolEnabled destructive writes', () => {
+  it.each([
+    [false, false, false],
+    [true, false, false],
+    [false, true, false],
+    [true, true, true],
+  ])('writes=%s, fullWrites=%s → enabled=%s', (writes, fullWrites, enabled) => {
+    expect(
+      isToolEnabled(tool('destructive_write', 'catalog'), config({ writes, fullWrites })),
+    ).toBe(enabled);
+  });
+
+  it('still requires the toolset to be selected', () => {
+    expect(
+      isToolEnabled(
+        tool('destructive_write', 'catalog'),
+        config({ writes: true, fullWrites: true, toolsets: new Set(['account']) }),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('isToolEnabled fail-closed', () => {
