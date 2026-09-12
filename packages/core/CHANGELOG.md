@@ -10,6 +10,8 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-12
+
 ### Changed
 
 - Public API `error_code` and `details` fields are preserved on normalized

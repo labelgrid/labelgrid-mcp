@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-12
+
+### Security
+
+- Refresh the desktop bundle's locked production dependencies to patched
+  compatible versions. The MCP SDK remains on v1.
+
 ### Fixed
 
 - Oversized tool responses now return a bounded `RESULT_TOO_LARGE` error instead
