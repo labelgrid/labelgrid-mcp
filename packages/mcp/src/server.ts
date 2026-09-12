@@ -3,7 +3,7 @@
  *
  * Only tools that pass {@link isToolEnabled} are registered. Each handler is
  * wrapped so it: (1) re-checks its gate at call time (defense in depth — the
- * registration filter is the first line), (2) runs the one-call handler, (3)
+ * registration filter is the first line), (2) runs the tool handler, (3)
  * logs the tool name, redacted args and duration to stderr, and (4) shapes the
  * result via {@link toToolResult} (API errors become isError results, never
  * protocol errors).

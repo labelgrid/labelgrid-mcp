@@ -3,9 +3,9 @@
  * {@link ApiResult}-to-MCP result mapper.
  *
  * A tool is a plain data declaration — name, gate, zod input shape, client-hint
- * annotations and a one-call handler. The server module turns each declaration
- * into a registered MCP tool. This keeps every tool a thin wrapper: one HTTP
- * call, no client-side business logic.
+ * annotations and a handler. The server module turns each declaration into a
+ * registered MCP tool. Handlers reuse shared API operations; compose them only
+ * for a demonstrated task, keeping validation and business rules in the API.
  */
 
 import type { ApiError, ApiResult, LabelGridClient } from '@labelgrid/core';
