@@ -155,6 +155,8 @@ quality report before confirming the release.
   full-write) or `labelgrid release confirm-review <release-id>` (CLI; prompts for
   confirmation) after reviewing. Accepting the hold sends the release onward toward
   distribution — do it only on explicit user direction, never to "unstick" a workflow.
+  If confirmation returns `blocking_issues_open`, resolve each entry in `blocking_issues`
+  or add the requested customer note to that review issue, then retry confirmation.
 
 ### Step 7 — Distribute (final, consequential)
 

@@ -259,7 +259,7 @@ const confirmReview: ToolDef = {
   gate: 'full_write',
   title: 'Confirm a held release into review',
   description:
-    'Confirm a release Preflight QC placed on hold, moving it into distribution review, after reviewing the quality report and accepting the release as-is. Safe to repeat.',
+    'Confirm a release Preflight QC placed on hold, moving it into distribution review, after reviewing the quality report and accepting the release as-is. If blocking issues remain, the blocking_issues_open error includes blocking_issues to resolve or answer with a review-issue note before retrying. Safe to repeat.',
   inputShape: { release_id: releaseId },
   annotations: { destructiveHint: true, idempotentHint: true },
   handler: (args, { client }) => client.post(`/releases/${args.release_id}/confirm-review`),

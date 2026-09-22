@@ -79,6 +79,7 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
   if (bounded.errors !== undefined) bounded.errors = '[truncated]';
   if (bounded.errors_structured !== undefined) bounded.errors_structured = '[truncated]';
   if (bounded.details !== undefined) bounded.details = '[truncated]';
+  if (bounded.blocking_issues !== undefined) bounded.blocking_issues = '[truncated]';
   const boundedText = JSON.stringify({ error: bounded }, null, 2);
   if (boundedText.length <= MAX_TOOL_TEXT) {
     return { content: [{ type: 'text', text: boundedText }], isError: true };
@@ -95,6 +96,7 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
     errors: bounded.errors,
     errors_structured: bounded.errors_structured,
     details: bounded.details,
+    blocking_issues: bounded.blocking_issues,
   };
   return {
     content: [{ type: 'text', text: JSON.stringify({ error: compact }, null, 2) }],
