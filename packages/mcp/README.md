@@ -178,7 +178,7 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 | `distribute_release` | full-write | Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission. |
 | `takedown_release` | full-write | Take a release down from ALL outlets/stores — a final action that removes it everywhere it was delivered. Re-distribution is a fresh submission. |
 | `confirm_review` | full-write | Confirm a release Preflight QC placed on hold, moving it into distribution review, after reviewing the quality report and accepting the release as-is. Safe to repeat. |
-| `enable_beatport` | full-write | Request Beatport onboarding for a label. One-time and cannot be un-requested — confirm the label is correct first. |
+| `enable_beatport` | full-write | Request Beatport onboarding for a label. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request. Confirm the label is correct first. |
 
 <!-- TOOLS:END -->
 
