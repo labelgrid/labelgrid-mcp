@@ -292,7 +292,7 @@ The server has three gates. Each is fail-closed: a tool is only registered — a
    - **distribute a release to stores** — a final submission subject to your account's weekly limit,
    - **take a release down from all stores**,
    - confirm a held release into review,
-   - request one-time Beatport onboarding for a label.
+   - request Beatport onboarding for a label; declined or canceled requests can be submitted again.
 
 Leaving `LABELGRID_ENABLE_FULL_WRITES` unset is the safe default: your AI assistant can prepare and validate everything, but the irreversible submission stays a deliberate, opt-in step.
 
