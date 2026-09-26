@@ -75,14 +75,22 @@ export function toToolResult(r: ApiResult<unknown>): ToolResult {
     return { content: [{ type: 'text', text: errorText }], isError: true };
   }
   // Omit bulky API details first, preserving the diagnostic core when it fits.
+  // Blocking issues are what a caller needs to recover, so they are kept
+  // unless they are too large on their own.
   const bounded: ApiError = { ...r.error };
   if (bounded.errors !== undefined) bounded.errors = '[truncated]';
   if (bounded.errors_structured !== undefined) bounded.errors_structured = '[truncated]';
   if (bounded.details !== undefined) bounded.details = '[truncated]';
-  if (bounded.blocking_issues !== undefined) bounded.blocking_issues = '[truncated]';
   const boundedText = JSON.stringify({ error: bounded }, null, 2);
   if (boundedText.length <= MAX_TOOL_TEXT) {
     return { content: [{ type: 'text', text: boundedText }], isError: true };
+  }
+  if (bounded.blocking_issues !== undefined) {
+    bounded.blocking_issues = '[truncated]';
+    const withoutIssuesText = JSON.stringify({ error: bounded }, null, 2);
+    if (withoutIssuesText.length <= MAX_TOOL_TEXT) {
+      return { content: [{ type: 'text', text: withoutIssuesText }], isError: true };
+    }
   }
   // Bound raw fields before encoding. Four string prefixes of at most 8,000 code units
   // leave room even when JSON escaping expands each code unit to six characters.

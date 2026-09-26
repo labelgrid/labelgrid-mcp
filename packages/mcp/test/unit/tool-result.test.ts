@@ -72,7 +72,7 @@ describe('toToolResult', () => {
         errors: { field: ['y'.repeat(500_000)] },
         errors_structured: [{ field: 'field', detail: 'z'.repeat(50_000) }],
         details: [{ context: 'w'.repeat(50_000) }],
-        blocking_issues: [{ context: 'v'.repeat(50_000) }],
+        blocking_issues: [{ id: '12345', code: 'audio.duplicate-recording' }],
       },
     });
     expect(r.isError).toBe(true);
@@ -96,7 +96,30 @@ describe('toToolResult', () => {
     expect(parsed.error.errors).toBe('[truncated]');
     expect(parsed.error.errors_structured).toBe('[truncated]');
     expect(parsed.error.details).toBe('[truncated]');
-    expect(parsed.error.blocking_issues).toBe('[truncated]');
+    expect(parsed.error.blocking_issues).toEqual([
+      { id: '12345', code: 'audio.duplicate-recording' },
+    ]);
+  });
+
+  it('truncates blocking issues only when they are oversized themselves', () => {
+    const r = toToolResult({
+      error: {
+        code: 'blocking_issues_open',
+        message: 'This release has blocking issues.',
+        status: 409,
+        details: { reason: 'Held' },
+        blocking_issues: [{ id: '1', code: 'v'.repeat(500_000) }],
+      },
+    });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text.length).toBeLessThanOrEqual(400_000);
+    expect(JSON.parse(r.content[0].text).error).toEqual({
+      code: 'blocking_issues_open',
+      message: 'This release has blocking issues.',
+      status: 409,
+      details: '[truncated]',
+      blocking_issues: '[truncated]',
+    });
   });
 
   it('keeps an oversized details-only error as valid bounded JSON', () => {
