@@ -38,10 +38,10 @@ const getRateLimit: ToolDef = {
 const revokeApiToken: ToolDef = {
   name: 'revoke_api_token',
   toolset: 'account',
-  gate: 'safe_write',
+  gate: 'destructive_write',
   title: 'Revoke an API token',
   description:
-    'Revoke a LabelGrid API token. Pass token_id to revoke a specific token; omit it to revoke the token currently in use. WARNING: revoking the current token immediately ends this session — the server loses access and stops working until you configure a new token.',
+    'Revoke a LabelGrid API token. Requires safe writes enabled and full writes armed. Pass token_id to revoke a specific token; omit it to revoke the token currently in use. WARNING: revoking the current token immediately ends this session — the server loses access and stops working until you configure a new token.',
   inputShape: { token_id: z.number().int().positive().optional() },
   annotations: { destructiveHint: true, idempotentHint: true },
   handler: (args, { client }) => {

@@ -173,10 +173,10 @@ const REPLACEMENT_ENTITY_LIST = REPLACEMENT_ENTITIES.join(' and ');
 const deleteCatalogItem: ToolDef = {
   name: 'delete_catalog_item',
   toolset: 'catalog',
-  gate: 'safe_write',
+  gate: 'destructive_write',
   title: 'Delete a catalog item',
   description:
-    `Delete a catalog entity. The API refuses deletes that would orphan data — ${entityDoc(
+    `Delete a catalog entity. Requires safe writes enabled and full writes armed. The API refuses deletes that would orphan data — ${entityDoc(
       (s) => s.deleteNote,
     )}` +
     ` \`replace_with\` — ${REPLACEMENT_ENTITY_LIST} only — is the id inheriting those credits; a 422 REPLACEMENT_UNAVAILABLE means nothing was deleted.`,

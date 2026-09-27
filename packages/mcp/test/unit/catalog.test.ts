@@ -70,15 +70,11 @@ describe('catalog toolset shape', () => {
       expect(byName(name).gate).toBe('read');
       expect(byName(name).annotations.readOnlyHint).toBe(true);
     }
-    for (const name of [
-      'create_catalog_item',
-      'update_catalog_item',
-      'delete_catalog_item',
-      'upload_image',
-    ]) {
+    for (const name of ['create_catalog_item', 'update_catalog_item', 'upload_image']) {
       expect(byName(name).gate).toBe('safe_write');
     }
     expect(byName('update_catalog_item').annotations.idempotentHint).toBe(true);
+    expect(byName('delete_catalog_item').gate).toBe('destructive_write');
     expect(byName('delete_catalog_item').annotations.destructiveHint).toBe(true);
   });
 

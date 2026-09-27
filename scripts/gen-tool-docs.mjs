@@ -50,6 +50,7 @@ const GATE_LABEL = {
   read: 'read',
   safe_write: 'write',
   full_write: 'full-write',
+  destructive_write: 'destructive-write',
 };
 
 const DIST = '../packages/mcp/dist';

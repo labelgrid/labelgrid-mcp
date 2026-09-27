@@ -56,6 +56,63 @@ const getDeliveryQueue: ToolDef = {
     release_id: releaseId,
     response_format: responseFormat,
   },
+  // Public GET /releases/{releaseId}/delivery-status response contract:
+  // https://api.labelgrid.com/docs/api.json (verified 2026-09-12).
+  // Passthrough preserves additional fields in detailed responses.
+  outputSchema: z
+    .object({
+      release_id: z.number().int(),
+      state: z.enum([
+        'not_submitted',
+        'in_progress',
+        'live',
+        'removing',
+        'removed',
+        'action_needed',
+      ]),
+      currently_live: z.boolean(),
+      ever_submitted: z.boolean(),
+      ever_delivered: z.boolean(),
+      outlets: z.array(
+        z
+          .object({
+            outlet: z.string(),
+            state: z.enum([
+              'queued',
+              'preparing',
+              'scheduled',
+              'delivered',
+              'action_needed',
+              'removing',
+              'removed',
+            ]),
+            operation: z.enum(['delivery', 'redelivery', 'takedown']),
+            customer_state: z.enum([
+              'queued',
+              'preparing',
+              'scheduled',
+              'delivered',
+              'delivery_delayed',
+              'not_sent',
+              'removing',
+              'removal_delayed',
+              'not_removed',
+              'removed',
+              'action_needed',
+            ]),
+            attention_owner: z.enum(['none', 'labelgrid', 'customer']),
+            recovery_state: z.enum(['none', 'queued', 'acknowledged']),
+            customer_action_code: z.string().nullable(),
+            action_url: z.string().nullable(),
+            queue_id: z.number().int().nullable(),
+            updated_at: z.string().nullable(),
+            error_code: z.string().nullable(),
+          })
+          .passthrough(),
+      ),
+      _projection: z.literal('concise').optional(),
+    })
+    .passthrough(),
   annotations: { readOnlyHint: true },
   handler: async (args, { client }) => {
     const result = await client.get(`/releases/${args.release_id}/delivery-status`);

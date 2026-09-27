@@ -4,7 +4,7 @@
   "display_name": "LabelGrid",
   "version": "0.1.1",
   "description": "Manage your LabelGrid music catalog, releases, files, analytics, royalties, and distribution from your AI client — the official LabelGrid MCP server.",
-  "long_description": "The official Model Context Protocol server for LabelGrid, the music distribution platform. Connect Claude Desktop to your own LabelGrid account and work with your catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language. Reads are always on; writes are opt-out and full distribution actions are doubly opt-in, so nothing ships without your say-so. If you install it without a token, the server starts in guided setup mode and walks you through creating one in chat.",
+  "long_description": "The official Model Context Protocol server for LabelGrid, the music distribution platform. Connect Claude Desktop to your own LabelGrid account and work with your catalog, releases, files, analytics, royalty accounting, webhooks, and distribution in natural language. Reads are always on; draft writes are on by default. Distribution actions require the full-writes flag and exact acknowledgment. Catalog deletion and API token revocation require both safe writes enabled and full writes armed. If you install it without a token, the server starts in guided setup mode and walks you through creating one in chat.",
   "author": {
     "name": "LabelGrid",
     "url": "https://labelgrid.com"

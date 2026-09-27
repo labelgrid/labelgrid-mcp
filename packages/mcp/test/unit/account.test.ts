@@ -48,12 +48,12 @@ describe('account toolset shape', () => {
     for (const t of accountTools) expect(t.toolset).toBe('account');
   });
 
-  it('get_account is a read-only read; revoke_api_token a destructive+idempotent safe write', () => {
+  it('get_account is a read-only read; revoke_api_token an idempotent destructive write', () => {
     const get = byName('get_account');
     expect(get.gate).toBe('read');
     expect(get.annotations.readOnlyHint).toBe(true);
     const revoke = byName('revoke_api_token');
-    expect(revoke.gate).toBe('safe_write');
+    expect(revoke.gate).toBe('destructive_write');
     expect(revoke.annotations.destructiveHint).toBe(true);
     expect(revoke.annotations.idempotentHint).toBe(true);
   });

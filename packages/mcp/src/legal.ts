@@ -13,7 +13,7 @@ export const LEGAL_SUMMARY =
 
 /** Shown only when full writes are armed. */
 export const FULL_WRITES_NOTICE =
-  'Full writes are enabled. Distribution submissions, takedowns, and immutable file uploads initiated by an AI agent have real, potentially irreversible consequences for your releases on streaming platforms and stores. By setting the LABELGRID_FULL_WRITES_ACK acknowledgment variable you accepted that all such actions are your sole responsibility.';
+  'Full writes are enabled. Distribution submissions, takedowns, and immutable file uploads initiated by an AI agent have real, potentially irreversible consequences for your releases on streaming platforms and stores. When safe writes are also enabled, catalog deletion and API token revocation are available; these can permanently remove catalog data or immediately end token access. By setting the LABELGRID_FULL_WRITES_ACK acknowledgment variable you accepted that all such actions are your sole responsibility.';
 
 /** The data-handling disclosure. */
 export const DATA_HANDLING_NOTE =
