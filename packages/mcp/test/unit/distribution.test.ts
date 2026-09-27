@@ -95,7 +95,7 @@ describe('distribution toolset shape', () => {
     expect(byName('distribute_release').description.toLowerCase()).toContain('final');
     expect(byName('distribute_release').description.toLowerCase()).toContain('weekly');
     expect(byName('takedown_release').description.toLowerCase()).toMatch(/final|all|remove/);
-    expect(byName('enable_beatport').description.toLowerCase()).toMatch(/cannot|one-time|once/);
+    expect(byName('enable_beatport').description.toLowerCase()).toContain('confirm the label');
   });
 
   it('carries the immutability caveats in the upload/delete descriptions', () => {

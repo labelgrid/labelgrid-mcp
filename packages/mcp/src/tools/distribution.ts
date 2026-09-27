@@ -7,7 +7,7 @@
  * These wrap: finalized audio/artwork/motion-artwork uploads (via the
  * presigned-URL flow or multipart), license file management, the FINAL
  * distribute/takedown actions, the Preflight-QC confirm-review step, and
- * one-time Beatport onboarding.
+ * Beatport onboarding.
  */
 
 import { type ApiResult, assertAllowedExtension, uploadViaPresignedUrl } from '@labelgrid/core';
@@ -271,7 +271,7 @@ const enableBeatport: ToolDef = {
   gate: 'full_write',
   title: 'Request Beatport onboarding for a label',
   description:
-    'Request Beatport onboarding for a label. One-time and cannot be un-requested — confirm the label is correct first.',
+    'Request Beatport onboarding for a label. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request. Confirm the label is correct first.',
   inputShape: { label_id: z.number().int().positive().describe('The label id.') },
   annotations: { destructiveHint: true },
   handler: (args, { client }) => client.post(`/labels/${args.label_id}/enable-beatport`),

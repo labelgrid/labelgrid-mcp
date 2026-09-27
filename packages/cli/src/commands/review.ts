@@ -4,7 +4,7 @@
  *   quality-report --release <id>  — the Preflight QC report ([--refresh] re-runs
  *                                    the checks first; the server budgets refreshes)
  *   note --issue <id> --text <t>   — attach a note to a review issue
- * Plus `labelgrid beatport enable --label <id>` — one-time Beatport onboarding.
+ * Plus `labelgrid beatport enable --label <id>` — Beatport onboarding.
  */
 
 import type { Command } from 'commander';
@@ -56,19 +56,21 @@ export function registerReview(program: Command, resolved: Resolved): void {
     });
 }
 
-/** `labelgrid beatport enable --label <id>` — one-time Beatport onboarding. */
+/** `labelgrid beatport enable --label <id>` — Beatport onboarding. */
 export function registerBeatport(program: Command, resolved: Resolved): void {
   const beatport = program.command('beatport').description('Beatport onboarding');
 
   beatport
     .command('enable')
-    .description('Request Beatport onboarding for a label (one-time; cannot be un-requested)')
+    .description(
+      'Request Beatport onboarding for a label; declined or canceled requests can be retried',
+    )
     .requiredOption('--label <id>', 'the label id')
     .action(async (opts: { label: string }, cmd: Command) => {
       const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
       await confirmOrAbort(
         ctx.out,
-        `request Beatport onboarding for label ${opts.label} (one-time, cannot be un-requested)`,
+        `request Beatport onboarding for label ${opts.label} (pending requests will not be duplicated)`,
         ctx.yes,
         ctx.readLine,
       );

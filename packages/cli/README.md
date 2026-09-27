@@ -198,7 +198,7 @@ labelgrid review issues --release 456
 
 ### `beatport` — Beatport onboarding
 
-`enable --label <id>` — a one-time request that cannot be un-requested (confirmed).
+`enable --label <id>` — request Beatport onboarding (confirmed). Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request.
 
 ```bash
 labelgrid beatport enable --label 123
