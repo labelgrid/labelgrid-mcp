@@ -211,6 +211,30 @@ describe('LabelGridClient error normalization', () => {
     if (!isOk(r)) expect(r.error.code).toBe('IDEMPOTENCY_IN_FLIGHT');
   });
 
+  it('passes through blocking review issues on 409', async () => {
+    const blockingIssues = [
+      { id: 17, code: 'release_title_format' },
+      { id: 23, code: 'cover_art_text' },
+    ];
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(409, {
+        message: 'Resolve the blocking issues before confirming review.',
+        error_code: 'blocking_issues_open',
+        blocking_issues: blockingIssues,
+      }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).post(
+      '/releases/9/confirm-review',
+    );
+    if (!isOk(r)) {
+      expect(r.error).toMatchObject({
+        code: 'blocking_issues_open',
+        status: 409,
+        blocking_issues: blockingIssues,
+      });
+    }
+  });
+
   it('maps 422 to VALIDATION_FAILED with errors and errors_structured passthrough', async () => {
     const fetchFn = vi.fn(async () =>
       jsonResponse(422, {

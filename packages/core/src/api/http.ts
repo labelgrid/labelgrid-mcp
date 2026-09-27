@@ -25,6 +25,8 @@ export type ApiError = {
   retry_after_seconds?: number;
   errors?: unknown;
   details?: unknown;
+  /** Actionable release-review issues returned when confirm-review is blocked. */
+  blocking_issues?: unknown;
   /** Structured validation detail passed through verbatim from the API (422). */
   errors_structured?: unknown;
 };
@@ -89,6 +91,7 @@ type ServerErrorParts = {
   errors?: unknown;
   errors_structured?: unknown;
   details?: unknown;
+  blocking_issues?: unknown;
 };
 
 /**
@@ -106,6 +109,7 @@ function extractServerError(body: unknown): ServerErrorParts {
   const errors = record.errors;
   const errorsStructured = record.errors_structured;
   const details = record.details;
+  const blockingIssues = record.blocking_issues;
   const topLevelCode =
     typeof record.error_code === 'string'
       ? record.error_code
@@ -132,6 +136,7 @@ function extractServerError(body: unknown): ServerErrorParts {
       errors,
       errors_structured: errorsStructured,
       details,
+      blocking_issues: blockingIssues,
     };
   }
   // Shape: { error: 'string' }
@@ -142,6 +147,7 @@ function extractServerError(body: unknown): ServerErrorParts {
       errors,
       errors_structured: errorsStructured,
       details,
+      blocking_issues: blockingIssues,
     };
   }
   // Shapes: { message } and/or { errors } and/or top-level { code }
@@ -152,6 +158,7 @@ function extractServerError(body: unknown): ServerErrorParts {
     errors,
     errors_structured: errorsStructured,
     details,
+    blocking_issues: blockingIssues,
   };
   // Derive a message from the first validation error when none was given.
   if (parts.message === undefined && errors !== null && typeof errors === 'object') {
@@ -183,6 +190,7 @@ function normalizeError(res: Response, body: unknown): ApiError {
     ...(server.field !== undefined ? { field: server.field } : {}),
     ...(server.errors !== undefined ? { errors: server.errors } : {}),
     ...(server.details !== undefined ? { details: server.details } : {}),
+    ...(server.blocking_issues !== undefined ? { blocking_issues: server.blocking_issues } : {}),
     ...extra,
   });
 

@@ -387,6 +387,40 @@ describe('standalone distribution actions', () => {
     expect(last(fetchFn).url).toContain('/releases/9/confirm-review');
   });
 
+  it('confirm_review preserves blocking issues returned by the API', async () => {
+    const blockingIssues = [
+      { id: 17, code: 'release_title_format' },
+      { id: 23, code: 'cover_art_text' },
+    ];
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            message: 'Resolve the blocking issues before confirming review.',
+            error_code: 'blocking_issues_open',
+            blocking_issues: blockingIssues,
+          }),
+          { status: 409 },
+        ),
+    );
+    const client = new LabelGridClient({
+      baseUrl: BASE,
+      token: 'tok',
+      fetchFn: fetchFn as unknown as typeof fetch,
+      version: 't',
+    });
+    const { ctx } = harness();
+    const result = await byName('confirm_review').handler({ release_id: 9 }, { ...ctx, client });
+
+    expect(result).toEqual({
+      error: expect.objectContaining({
+        code: 'blocking_issues_open',
+        status: 409,
+        blocking_issues: blockingIssues,
+      }),
+    });
+  });
+
   it('enable_beatport → POST /labels/{id}/enable-beatport', async () => {
     const { fetchFn, ctx } = harness();
     await byName('enable_beatport').handler({ label_id: 3 }, ctx);
