@@ -21,8 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Write operations may already have completed; check their state before retrying.
 - Oversized API and handler errors remain valid JSON, preserving bounded
   diagnostic fields and explicitly marking omitted details.
-- An oversized error keeps its `blocking_issues` list whenever the list fits,
-  dropping other bulky fields first.
+- An oversized error keeps its `blocking_issues` list when the error fits after
+  bulky API details are dropped; otherwise the list may be truncated.
 
 ### Changed
 
