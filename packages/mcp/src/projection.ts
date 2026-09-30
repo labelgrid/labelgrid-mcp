@@ -34,6 +34,7 @@ const CATALOG_FIELDS: readonly string[] = [
   'full_name',
   'status',
   'review_status',
+  'preflight_hold',
   'is_live',
   'barcode_number',
   'cat',

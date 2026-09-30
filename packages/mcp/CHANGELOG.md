@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `search_catalog` and `get_catalog_item` keep the release `preflight_hold` flag
+  in concise mode, so a Preflight QC hold can be told apart from a release
+  queued for review without a verbose call.
+
 ## [0.8.0] - 2026-09-30
 
 ### Security
