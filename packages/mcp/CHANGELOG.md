@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-09-12
+## [0.8.0] - 2026-09-30
 
 ### Security
 
@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Write operations may already have completed; check their state before retrying.
 - Oversized API and handler errors remain valid JSON, preserving bounded
   diagnostic fields and explicitly marking omitted details.
+- An oversized error keeps its `blocking_issues` list whenever the list fits,
+  dropping other bulky fields first.
 
 ### Changed
 
@@ -29,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   predicates, and one current state per outlet. It no longer reads or interprets
   raw distribution queue rows; the former outlet, status, and pagination inputs
   have been removed.
+- `confirm_review` documents the `blocking_issues_open` error: it lists the
+  blocking issues to resolve, or to answer with a review-issue note, before
+  retrying.
+- `enable_beatport` no longer describes onboarding as one-time. Declined or
+  canceled requests can be submitted again; a pending request or an already
+  verified label does not start another one.
 
 ## [0.7.0] - 2026-08-20
 
