@@ -5,6 +5,14 @@ All notable changes to `@labelgrid/cli` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-09-30
+
+### Changed
+
+- `labelgrid beatport enable` no longer describes onboarding as one-time. Its
+  help text says declined or canceled requests can be retried, and the
+  confirmation prompt says a pending request will not be duplicated.
+
 ## [0.3.2] - 2026-08-05
 
 ### Changed

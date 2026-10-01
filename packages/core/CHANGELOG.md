@@ -10,12 +10,14 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
-## [0.2.3] - 2026-09-12
+## [0.2.3] - 2026-09-30
 
 ### Changed
 
 - Public API `error_code` and `details` fields are preserved on normalized
   errors, including typed 404 and 5xx responses.
+- Normalized errors also preserve the API's `blocking_issues` field, which
+  lists the review issues that block a confirm-review request.
 
 ## [0.2.2] - 2026-08-20
 
