@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-02
+
 ### Changed
 
 - `search_catalog` and `get_catalog_item` keep the release `preflight_hold` flag
