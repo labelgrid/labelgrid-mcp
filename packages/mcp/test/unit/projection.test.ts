@@ -207,6 +207,7 @@ describe('per-tool allowlists', () => {
       'full_name',
       'status',
       'review_status',
+      'preflight_hold',
       'is_live',
       'barcode_number',
       'cat',
@@ -293,6 +294,48 @@ describe('applyProjection', () => {
   it("'detailed' bypasses projection and returns the verbatim response", () => {
     const r = applyProjection({ data }, 'search_catalog', 'detailed');
     expect('data' in r && r.data).toBe(data);
+  });
+
+  it.each([true, false])(
+    'keeps preflight_hold=%s on a concise get_catalog_item release',
+    (hold) => {
+      const release = {
+        id: 7,
+        title: 'R',
+        review_status: 'to_review',
+        preflight_hold: hold,
+        internal_note: 'drop',
+      };
+      const r = applyProjection({ data: release }, 'get_catalog_item', undefined);
+      expect('data' in r && r.data).toEqual({
+        id: 7,
+        title: 'R',
+        review_status: 'to_review',
+        preflight_hold: hold,
+        _projection: 'concise',
+      });
+    },
+  );
+
+  it('keeps preflight_hold on every concise search_catalog row', () => {
+    const r = applyProjection(
+      {
+        data: {
+          data: [
+            { id: 1, review_status: 'to_review', preflight_hold: true, internal_note: 'drop' },
+            { id: 2, review_status: 'to_review', preflight_hold: false, internal_note: 'drop' },
+          ],
+          meta: { current_page: 1, total: 2, per_page: 25 },
+        },
+      },
+      'search_catalog',
+      undefined,
+    );
+    const rows = ('data' in r && (r.data as { data: unknown[] }).data) || [];
+    expect(rows).toEqual([
+      { id: 1, review_status: 'to_review', preflight_hold: true },
+      { id: 2, review_status: 'to_review', preflight_hold: false },
+    ]);
   });
 
   it('passes error results through untouched', () => {
