@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `create_catalog_item` writer guidance states that `ipi` is required when
+  `pro` is new or changed, and that a duplicate name is refused with a 422;
+  reuse the existing writer found with `search_catalog`.
+
 ## [0.8.1] - 2026-10-02
 
 ### Changed

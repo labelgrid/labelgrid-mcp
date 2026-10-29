@@ -73,6 +73,15 @@ describe('entity registry', () => {
     expect([...REPLACEMENT_ENTITIES]).toEqual(['writer', 'publisher']);
   });
 
+  it('states when a writer ipi is required and how to recover from a duplicate name', () => {
+    // ipi is required only when pro is new or changed; a request that keeps the
+    // stored pro is unaffected, so the rule is stated as that condition.
+    expect(ENTITIES.writer.fieldsDoc).toContain('ipi (required when pro is new or changed)');
+    // A duplicate name is a 422; the way past it is to reuse the writer found by name.
+    expect(ENTITIES.writer.fieldsDoc).toContain('422');
+    expect(ENTITIES.writer.fieldsDoc).toContain('search_catalog');
+  });
+
   it('names the real refusals on the writer and publisher delete notes', () => {
     // A writer delete is refused on TRACK and ARTIST credits — both, not tracks alone.
     expect(ENTITIES.writer.deleteNote).toContain('tracks');

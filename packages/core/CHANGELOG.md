@@ -10,6 +10,11 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Writer field guidance states that `ipi` is required when `pro` is new or
+  changed, and that a duplicate writer name is refused with a 422.
+
 ## [0.2.3] - 2026-09-30
 
 ### Changed
