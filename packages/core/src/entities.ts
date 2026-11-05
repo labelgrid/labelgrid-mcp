@@ -58,7 +58,7 @@ export const ENTITIES: Record<EntityName, EntitySpec> = {
     path: '/writers',
     filtersDoc: 'writer: name, ipi.',
     fieldsDoc:
-      'writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi, isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi).',
+      'writer — required: first_name, last_name; optional: middle_name, display_credits, email, country, pro, ipi (required when pro is new or changed), isni, publisher_id (or publisher_name/publisher_pro/publisher_ipi). A name already in your catalog is refused with a 422 — find that writer with search_catalog (name filter) and reuse it.',
     deleteNote:
       'writer: refused while still referenced by tracks or artists, unless replace_with reassigns those credits.',
     acceptsDeleteReplacement: true,
