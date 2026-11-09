@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `get_delivery_queue` keeps each outlet's `latest_success` (`operation`,
+  `queue_id`, `completed_at`) and `currently_live` in concise mode. The API
+  added both fields, so a tool caller can tell a store's last completed work
+  apart from a later failed attempt, and see which stores the release is
+  still live on.
+
 - `create_catalog_item` writer guidance states that `ipi` is required when
   `pro` is new or changed, and that a duplicate name is refused with a 422;
   reuse the existing writer found with `search_catalog`.
