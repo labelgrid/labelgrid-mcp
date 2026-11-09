@@ -10,6 +10,8 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-09
+
 ### Changed
 
 - Writer field guidance states that `ipi` is required when `pro` is new or
