@@ -11,7 +11,13 @@
       "operation": "delivery",
       "queue_id": 456,
       "updated_at": "2026-08-21T12:00:00+00:00",
-      "error_code": null
+      "error_code": null,
+      "latest_success": {
+        "operation": "delivery",
+        "queue_id": 456,
+        "completed_at": "2026-08-21T12:00:00+00:00"
+      },
+      "currently_live": true
     }
   ]
 }

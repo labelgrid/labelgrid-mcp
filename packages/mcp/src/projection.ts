@@ -70,6 +70,8 @@ export const CONCISE_ALLOWLISTS: Record<string, readonly string[]> = {
     'queue_id',
     'updated_at',
     'error_code',
+    'latest_success',
+    'completed_at',
   ],
   query_artificial_streaming: [
     'dsp',

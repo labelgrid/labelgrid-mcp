@@ -51,7 +51,7 @@ const getDeliveryQueue: ToolDef = {
   gate: 'read',
   title: 'Get release delivery status',
   description:
-    "Read a release's canonical delivery status: its overall state, current and historical delivery predicates, and one current state per outlet. The API owns all queue-history interpretation. A release outside your account is indistinguishable from an unknown release (`RELEASE_NOT_ACCESSIBLE`).",
+    "Read a release's canonical delivery status: its overall state, current and historical delivery predicates, and one current state per outlet. Each outlet also reports its latest completed work (`latest_success`) and whether the release is live there (`currently_live`). The API owns all queue-history interpretation. A release outside your account is indistinguishable from an unknown release (`RELEASE_NOT_ACCESSIBLE`).",
   inputShape: {
     release_id: releaseId,
     response_format: responseFormat,

@@ -243,6 +243,8 @@ describe('per-tool allowlists', () => {
       'queue_id',
       'updated_at',
       'error_code',
+      'latest_success',
+      'completed_at',
     ]);
     expect([...CONCISE_ALLOWLISTS.query_artificial_streaming]).toEqual([
       'dsp',
