@@ -115,10 +115,11 @@ jobs:
         if: steps.check.outputs.published == 'false'
         run: |
           CORE_VERSION=$(node -p "require('./packages/mcp/package.json').dependencies['@labelgrid/core']")
-          # A lockstep release publishes core earlier in THIS run; the registry
-          # read path can lag the publish by up to a minute, so retry before
-          # failing closed.
-          for i in 1 2 3 4 5 6; do
+          # A lockstep release publishes core earlier in THIS run, and the
+          # registry read path can lag the publish by minutes
+          # (v0.8.2: core was still not visible 90 s after its publish), so
+          # retry for up to 5 minutes before failing closed.
+          for i in $(seq 1 20); do
             if npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
               exit 0
             fi
@@ -149,7 +150,7 @@ jobs:
         run: |
           CORE_VERSION=$(node -p "require('./packages/cli/package.json').dependencies['@labelgrid/core']")
           # Same lockstep-lag retry as the server preflight above.
-          for i in 1 2 3 4 5 6; do
+          for i in $(seq 1 20); do
             if npm view "@labelgrid/core@$CORE_VERSION" version >/dev/null 2>&1; then
               exit 0
             fi
