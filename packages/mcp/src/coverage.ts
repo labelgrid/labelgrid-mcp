@@ -60,6 +60,7 @@ export const COVERAGE: Record<string, string> = {
   'GET /stream-radar/flags/{streamRadarFlag}': 'query_artificial_streaming',
   // delivery
   'GET /releases/{releaseId}/delivery-status': 'get_delivery_queue',
+  'GET /releases/{release}/profile-protection': 'get_release_profile_protection',
   'GET /releases/{release}/landing-config': 'get_landing_config',
   // finance
   'GET /statements': 'query_financials',
@@ -162,5 +163,6 @@ export const PENDING_DOCS: Record<string, string> = {
   'GET /account': 'get_account',
   'GET /analytics/availability': 'get_analytics_availability',
   'GET /releases/{releaseId}/delivery-status': 'get_delivery_queue',
+  'GET /releases/{release}/profile-protection': 'get_release_profile_protection',
   'GET /tracks/{track}/files/{assetType}/download-url': 'get_asset',
 };
