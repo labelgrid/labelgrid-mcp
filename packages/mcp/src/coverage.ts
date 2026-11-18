@@ -60,6 +60,7 @@ export const COVERAGE: Record<string, string> = {
   'GET /stream-radar/flags/{streamRadarFlag}': 'query_artificial_streaming',
   // delivery
   'GET /releases/{releaseId}/delivery-status': 'get_delivery_queue',
+  'GET /releases/{release}/profile-protection': 'get_release_profile_protection',
   'GET /releases/{release}/landing-config': 'get_landing_config',
   // finance
   'GET /statements': 'query_financials',
@@ -143,6 +144,8 @@ export const EXCLUDED: Record<string, string> = {
   'GET /analytics/streams-by-age': 'served by get_analytics (summary)',
   'GET /analytics/shares-by-country': 'served by get_analytics (summary)',
   // Alternate/adjacent surfaces intentionally not exposed in v1.
+  'GET /analytics/landing-pages/releases/{release}': 'landing-page analytics — not exposed in v1',
+  'GET /analytics/landing-pages/labels/{label}': 'landing-page analytics — not exposed in v1',
   'GET /queues/distro':
     'raw queue history — use the canonical release delivery status projection instead',
   'POST /releases/{release}/withdraw-review': 'withdraw-review flow — not exposed in v1',
@@ -160,5 +163,6 @@ export const PENDING_DOCS: Record<string, string> = {
   'GET /account': 'get_account',
   'GET /analytics/availability': 'get_analytics_availability',
   'GET /releases/{releaseId}/delivery-status': 'get_delivery_queue',
+  'GET /releases/{release}/profile-protection': 'get_release_profile_protection',
   'GET /tracks/{track}/files/{assetType}/download-url': 'get_asset',
 };

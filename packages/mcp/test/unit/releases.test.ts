@@ -48,6 +48,7 @@ describe('releases toolset shape', () => {
     expect(releaseTools.map((t) => t.name)).toEqual([
       'get_release_review',
       'get_delivery_queue',
+      'get_release_profile_protection',
       'get_landing_config',
       'list_track_licenses',
       'run_release_checks',
@@ -58,6 +59,7 @@ describe('releases toolset shape', () => {
     for (const name of [
       'get_release_review',
       'get_delivery_queue',
+      'get_release_profile_protection',
       'get_landing_config',
       'list_track_licenses',
     ]) {
@@ -181,6 +183,15 @@ describe('get_delivery_queue', () => {
         },
       });
     }
+  });
+});
+
+describe('get_release_profile_protection', () => {
+  it('→ GET /releases/{id}/profile-protection', async () => {
+    const { fetchFn, ctx } = harness();
+    await byName('get_release_profile_protection').handler({ release_id: 21 }, ctx);
+    expect(lastInit(fetchFn).method).toBe('GET');
+    expect(lastUrl(fetchFn)).toContain('/releases/21/profile-protection');
   });
 });
 

@@ -63,6 +63,18 @@ const getDeliveryQueue: ToolDef = {
   },
 };
 
+const getReleaseProfileProtection: ToolDef = {
+  name: 'get_release_profile_protection',
+  toolset: 'releases',
+  gate: 'read',
+  title: 'Get Spotify profile protection',
+  description:
+    "Read whether Spotify keeps a release off the artist's profile until the artist approves it in Spotify for Artists: status and synced_at.",
+  inputShape: { release_id: releaseId },
+  annotations: { readOnlyHint: true },
+  handler: (args, { client }) => client.get(`/releases/${args.release_id}/profile-protection`),
+};
+
 const getLandingConfig: ToolDef = {
   name: 'get_landing_config',
   toolset: 'releases',
@@ -180,6 +192,7 @@ const addReviewIssueNote: ToolDef = {
 export const releaseTools: ToolDef[] = [
   getReleaseReview,
   getDeliveryQueue,
+  getReleaseProfileProtection,
   getLandingConfig,
   listTrackLicenses,
   runReleaseChecks,
