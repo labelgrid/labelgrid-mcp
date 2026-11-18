@@ -143,6 +143,8 @@ export const EXCLUDED: Record<string, string> = {
   'GET /analytics/streams-by-age': 'served by get_analytics (summary)',
   'GET /analytics/shares-by-country': 'served by get_analytics (summary)',
   // Alternate/adjacent surfaces intentionally not exposed in v1.
+  'GET /analytics/landing-pages/releases/{release}': 'landing-page analytics — not exposed in v1',
+  'GET /analytics/landing-pages/labels/{label}': 'landing-page analytics — not exposed in v1',
   'GET /queues/distro':
     'raw queue history — use the canonical release delivery status projection instead',
   'POST /releases/{release}/withdraw-review': 'withdraw-review flow — not exposed in v1',
