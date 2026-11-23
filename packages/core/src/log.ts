@@ -11,12 +11,32 @@ const SECRET_KEY = /token|password|secret|nonce|authorization|key/i;
 // preview link, a webhook endpoint), so values under url/link keys are masked,
 // and a URL inside any other logged string is replaced. A boolean or number
 // under such a key (`links_page_enabled`) carries no URL and is kept. Any
-// `scheme://` URL is matched (https, s3, ftp, …), also when glued to a preceding
-// word; scheme-less forms (`www.…`, `//host/…`) are not.
+// `scheme://` URL is matched (https, s3, ftp, …); letters glued in front of the
+// scheme are removed with it. Scheme-less forms (`www.…`, `//host/…`) are not.
 const URL_KEY = /url|link/i;
-const URL_IN_TEXT = /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
+// Anchored on the literal `://`, so a match costs one pass over the string; an
+// unanchored scheme run would rescan from every letter (polynomial backtracking).
+const URL_BODY = /:\/\/[^\s"'<>]+/g;
+const SCHEME_CHAR = /[A-Za-z0-9+.-]/;
 const MASK = '***REDACTED***';
 const URL_MASK = '[url redacted]';
+
+/** Replaces every `scheme://…` URL in `text`, scheme letters included. */
+function scrubUrls(text: string): string {
+  if (!text.includes('://')) return text;
+  let out = '';
+  let last = 0;
+  for (const m of text.matchAll(URL_BODY)) {
+    const at = m.index ?? 0;
+    let start = at;
+    while (start > last && SCHEME_CHAR.test(text[start - 1] as string)) start--;
+    // A bare `://` with no scheme in front of it is not a URL.
+    if (start === at) continue;
+    out += text.slice(last, start) + URL_MASK;
+    last = at + m[0].length;
+  }
+  return out + text.slice(last);
+}
 
 /**
  * Deep-clones a value, replacing the value of any object key whose name looks
@@ -26,7 +46,7 @@ const URL_MASK = '[url redacted]';
  */
 export function redactSecrets(v: unknown): unknown {
   if (typeof v === 'string') {
-    return v.replace(URL_IN_TEXT, URL_MASK);
+    return scrubUrls(v);
   }
   if (Array.isArray(v)) {
     return v.map((item) => redactSecrets(item));

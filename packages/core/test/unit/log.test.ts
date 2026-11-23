@@ -62,11 +62,22 @@ describe('redactSecrets', () => {
     expect(config.custom_description).toBe('see [url redacted]');
   });
 
-  it('replaces any scheme:// URL, also when glued to a preceding word', () => {
-    expect(redactSecrets('seehttps://a.test/p?token=t1')).toBe('see[url redacted]');
+  it('replaces any scheme:// URL, and letters glued in front of it go with it', () => {
+    expect(redactSecrets('seehttps://a.test/p?token=t1')).toBe('[url redacted]');
+    expect(redactSecrets('see https://a.test/p?token=t1')).toBe('see [url redacted]');
     expect(redactSecrets('copy s3://bucket/key?sig=1 now')).toBe('copy [url redacted] now');
     expect(redactSecrets('ftp://h.test/f?x=1')).toBe('[url redacted]');
     expect(redactSecrets('a plain sentence: no link')).toBe('a plain sentence: no link');
+    expect(redactSecrets('bare ://x stays')).toBe('bare ://x stays');
+    expect(redactSecrets('two: a://x and b://y')).toBe('two: [url redacted] and [url redacted]');
+  });
+
+  it('stays linear on long inputs with no URL (no polynomial backtracking)', () => {
+    const long = 'a'.repeat(200_000);
+    const started = Date.now();
+    expect(redactSecrets(long)).toBe(long);
+    expect(redactSecrets(`${long}://x`)).toBe('[url redacted]');
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 
   it('returns primitives unchanged', () => {
