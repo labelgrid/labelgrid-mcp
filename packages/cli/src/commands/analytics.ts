@@ -1,7 +1,7 @@
 /**
  * `labelgrid analytics get` — the streaming analytics summary. `--start`,
- * `--end` and `--metrics` are required (the server caps the window at 400 days
- * and accepts 1-12 section keys per request out of the 47 available). Every
+ * `--end` and `--metrics` are required (the server caps the window at 730 days
+ * and accepts up to all 49 section keys in one request). Every
  * section aggregates over the resolved filter scope, so `--upc` returns release
  * totals rather than per-track rows; the per-track daily series live in the
  * `track-streams-daily` and `track-listeners-daily` sections, which need a
@@ -22,8 +22,8 @@ export function registerAnalytics(program: Command, resolved: Resolved): void {
     .command('get')
     .description('Retrieve a streaming analytics summary for a date window')
     .requiredOption('--start <date>', 'window start, YYYY-MM-DD')
-    .requiredOption('--end <date>', 'window end, YYYY-MM-DD (max 400-day span)')
-    .requiredOption('--metrics <list>', 'comma-separated section keys, 1-12 per request')
+    .requiredOption('--end <date>', 'window end, YYYY-MM-DD (max 730-day span)')
+    .requiredOption('--metrics <list>', 'comma-separated section keys, one or more per request')
     .option(
       '--platform <name>',
       'SPOTIFY, ITUNES, APPLE_MUSIC, DEEZER, BOOMPLAY, AWA, AUDIOMACK, AMAZON, KUGOU, KUWO or QQMUSIC',

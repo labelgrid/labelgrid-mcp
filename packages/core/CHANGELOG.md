@@ -10,6 +10,13 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- A 422 response that carries its own `error_code` or `code` keeps that code on
+  the normalized error instead of `VALIDATION_FAILED`, as 403, 404, 409 and 5xx
+  responses already did. A 422 without one, or with the generic
+  `validation_failed`, still maps to `VALIDATION_FAILED`.
+
 ## [0.2.4] - 2026-11-09
 
 ### Changed

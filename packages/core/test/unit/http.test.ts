@@ -251,6 +251,51 @@ describe('LabelGridClient error normalization', () => {
     }
   });
 
+  it('passes a 422 server `code` through instead of VALIDATION_FAILED', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(422, { message: 'The file is compressed audio.', code: 'wav_compressed_audio' }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).post('/tracks/1/files', {});
+    expect(isOk(r)).toBe(false);
+    if (!isOk(r)) {
+      expect(r.error.code).toBe('wav_compressed_audio');
+      expect(r.error.status).toBe(422);
+    }
+  });
+
+  it('keeps VALIDATION_FAILED for a field-validation 422 the server labels validation_failed', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(422, {
+        message: 'The s3 key field is required.',
+        errors: { s3_key: ['required'] },
+        code: 'validation_failed',
+      }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).put(
+      '/tracks/1/files/stereo',
+      {},
+    );
+    expect(isOk(r)).toBe(false);
+    if (!isOk(r)) {
+      expect(r.error.code).toBe('VALIDATION_FAILED');
+      expect(r.error.errors).toEqual({ s3_key: ['required'] });
+    }
+  });
+
+  it('passes a 422 server `error_code` through instead of VALIDATION_FAILED', async () => {
+    const fetchFn = vi.fn(async () =>
+      jsonResponse(422, {
+        message: 'The label allowance is reached.',
+        error_code: 'active_label_cap_exceeded',
+      }),
+    );
+    const r = await makeClient(fetchFn as unknown as typeof fetch).post('/releases/9/distribute');
+    expect(isOk(r)).toBe(false);
+    if (!isOk(r)) {
+      expect(r.error.code).toBe('active_label_cap_exceeded');
+    }
+  });
+
   it('maps 429 to RATE_LIMITED with retry_after_seconds from Retry-After', async () => {
     const fetchFn = vi.fn(async () =>
       jsonResponse(429, { message: 'Too Many Requests' }, { 'Retry-After': '37' }),

@@ -172,7 +172,7 @@ labelgrid royalties breakdown --group-by release,dsp --filter start_date=2026-01
 
 ### `analytics` — streaming analytics
 
-`get --start <date> --end <date> --metrics <list>` (max 400-day window; 1-12 section keys per request), optionally `--platform`, `--release-id`, `--isrc`, `--upc`. `availability` prints the section-by-platform availability matrix and each platform's reporting cadence (daily or weekly).
+`get --start <date> --end <date> --metrics <list>` (max 730-day window; any number of section keys per request), optionally `--platform`, `--release-id`, `--isrc`, `--upc`. `availability` prints the section-by-platform availability matrix and each platform's reporting cadence (daily or weekly).
 
 ```bash
 labelgrid analytics get --start 2026-06-01 --end 2026-06-28 --metrics streams,listeners
@@ -224,7 +224,7 @@ labelgrid catalog search --type track --filter release_id=456 --json \
 NOT_FOUND: No release found with that id.
 ```
 
-Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `VALIDATION_FAILED` (422, with field errors), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`.
+Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `VALIDATION_FAILED` (422, with field errors, or the server's own code when the 422 carries one), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`.
 
 ## Destructive commands and confirmation
 
@@ -249,7 +249,7 @@ Anything other than `y`/`yes` aborts (exit 1) before any API call. Pass `--yes` 
 
 **Uploads** are guarded before any byte leaves your machine:
 
-- Each `--type` has a file-extension allowlist (for example `stereo` accepts `.wav`/`.flac`/`.aif`/`.aiff`; `cover-art` accepts common image formats), so the CLI cannot be pointed at an arbitrary file.
+- Each `--type` has a file-extension allowlist (for example `stereo` accepts `.wav`/`.flac`; `cover-art` accepts common image formats), so the CLI cannot be pointed at an arbitrary file.
 - Symlinks are resolved first and the allowlist is applied to the real target.
 - The parent flag must match the type: track asset types require `--track`, release asset types require `--release`.
 - Uploaded assets become immutable once the release is distributed — upload final files before distributing.

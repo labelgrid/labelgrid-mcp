@@ -56,7 +56,7 @@ describe('get_analytics', () => {
     const schema = z.object(byName('get_analytics').inputShape);
     expect(schema.safeParse({}).success).toBe(false);
     expect(schema.safeParse({ start_date: '2026-01-01' }).success).toBe(false);
-    // metrics[] is required by the server (1..12 keys) — omitting it must fail.
+    // metrics[] is required by the server — omitting it must fail.
     expect(schema.safeParse({ start_date: '2026-01-01', end_date: '2026-01-31' }).success).toBe(
       false,
     );
@@ -66,7 +66,7 @@ describe('get_analytics', () => {
     ).toBe(true);
   });
 
-  it('bounds metrics to 1..12 keys via zod', () => {
+  it('bounds metrics to 1..all section keys via zod', () => {
     const schema = z.object(byName('get_analytics').inputShape);
     const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
     expect(schema.safeParse({ ...base, metrics: [] }).success).toBe(false);
@@ -86,8 +86,25 @@ describe('get_analytics', () => {
       'streams-by-gender',
     ];
     expect(thirteen).toHaveLength(13);
-    expect(schema.safeParse({ ...base, metrics: thirteen }).success).toBe(false);
-    expect(schema.safeParse({ ...base, metrics: thirteen.slice(0, 12) }).success).toBe(true);
+    // The server accepts every section in one request; the old 12-key cap is gone.
+    expect(schema.safeParse({ ...base, metrics: thirteen }).success).toBe(true);
+    // The ceiling is the number of section keys (49).
+    expect(schema.safeParse({ ...base, metrics: Array(49).fill('streams') }).success).toBe(true);
+    expect(schema.safeParse({ ...base, metrics: Array(50).fill('streams') }).success).toBe(false);
+  });
+
+  it('accepts the downloads section and sends it as metrics[]=downloads', async () => {
+    const schema = z.object(byName('get_analytics').inputShape);
+    const args = {
+      start_date: '2026-01-01',
+      end_date: '2026-01-31',
+      metrics: ['downloads'],
+      platform: 'AMAZON',
+    };
+    expect(schema.safeParse(args).success).toBe(true);
+    const { fetchFn, ctx } = harness();
+    await byName('get_analytics').handler(args, ctx);
+    expect(lastUrl(fetchFn)).toContain('metrics[]=downloads');
   });
 
   it('accepts the expanded section keys and platforms', () => {
@@ -137,12 +154,13 @@ describe('get_analytics', () => {
       'social-artist-reach',
       'social-artist-reach-daily',
       'soundcloud-engagement',
+      'tiktok-engagement',
     ];
-    expect(social).toHaveLength(8);
+    expect(social).toHaveLength(9);
     for (const metric of social) {
       expect(schema.safeParse({ ...base, metrics: [metric] }).success).toBe(true);
     }
-    // The whole family fits one request, under the 12-key cap.
+    // The whole family fits one request.
     expect(schema.safeParse({ ...base, metrics: social }).success).toBe(true);
   });
 
@@ -226,7 +244,7 @@ describe('get_analytics', () => {
   it('rejects an unknown metric and platform via zod', () => {
     const schema = z.object(byName('get_analytics').inputShape);
     const base = { start_date: '2026-01-01', end_date: '2026-01-31' };
-    expect(schema.safeParse({ ...base, metrics: ['downloads'] }).success).toBe(false);
+    expect(schema.safeParse({ ...base, metrics: ['not-a-section'] }).success).toBe(false);
     // Valid metrics included so the failure isolates the platform enum — without
     // them the parse fails on the missing required field and TIDAL is never tested.
     expect(schema.safeParse({ ...base, metrics: ['streams'], platform: 'TIDAL' }).success).toBe(
@@ -237,12 +255,13 @@ describe('get_analytics', () => {
     );
   });
 
-  it('carries the 400-day window, over-90-day pacing and rate-limit caveats in the description', () => {
+  it('carries the 730-day window, over-90-day pacing and rate-limit caveats in the description', () => {
     const desc = byName('get_analytics').description;
-    expect(desc).toContain('400 days');
+    expect(desc).toContain('730 days');
+    expect(desc).not.toContain('400 days');
     expect(desc).toContain('90 days');
     expect(desc).toContain('429');
-    expect(desc).not.toContain('30 days');
+    expect(desc).not.toMatch(/\b30 days\b/);
   });
 });
 

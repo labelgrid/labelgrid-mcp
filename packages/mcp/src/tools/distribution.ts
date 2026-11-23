@@ -16,7 +16,7 @@ import type { ToolDef } from './types.js';
 
 /** Per-target upload extension allow-lists: an upload tool never reads an arbitrary file. */
 const TRACK_UPLOAD_EXTS: Record<string, string[]> = {
-  track_stereo: ['.wav', '.flac', '.aif', '.aiff'],
+  track_stereo: ['.wav', '.flac'],
   track_dolby: ['.wav'],
   track_lyrics: ['.lrc', '.txt'],
 };
@@ -83,7 +83,7 @@ const uploadAsset: ToolDef = {
   title: 'Upload a release/track asset',
   description:
     'Upload a finalized track or release asset from a local file. ' +
-    '`track_stereo` (WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
+    '`track_stereo` (WAV/FLAC), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
     '`release_cover_art` uploads or replaces the static cover art image. ' +
     '`release_motion_square`/`release_motion_tall` upload the animated cover (motion artwork) video, also asynchronous. ' +
     'All assets become immutable once the release is distributed — upload final files first.',

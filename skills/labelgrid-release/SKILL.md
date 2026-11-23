@@ -117,7 +117,7 @@ final versions before distributing.**
   labelgrid upload ./cover.jpg  --release <release-id> --type cover-art
   ```
 
-  Track types (`--track`): `stereo` (`.wav`/`.flac`/`.aif`/`.aiff`), `dolby` (`.wav`),
+  Track types (`--track`): `stereo` (`.wav`/`.flac`), `dolby` (`.wav`),
   `lyrics` (`.lrc`/`.txt`). Release types (`--release`): `cover-art` (image),
   `motion-square`, `motion-tall` (`.mp4`/`.mov`). Each type enforces an extension
   allowlist.
@@ -217,7 +217,7 @@ fresh submission.
 ### Analytics and royalties after release
 
 - MCP: `get_analytics` with `start_date`, `end_date` (both `YYYY-MM-DD`, window capped
-  at 400 days) and `metrics` (required, 1-12 section keys per request); optionally narrow
+  at 730 days) and `metrics` (required, any number of section keys in one request); optionally narrow
   by `platform` (e.g. `SPOTIFY`, `APPLE_MUSIC`, `DEEZER`, `AUDIOMACK`, `KUGOU`),
   `release_id`, `isrc`, `upc`, or `artist_names`. Call `get_analytics_availability`
   first to see which sections each platform reports and each platform's reporting

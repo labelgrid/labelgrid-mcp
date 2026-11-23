@@ -187,9 +187,13 @@ describe('upload_asset', () => {
     writeFileSync(flac, Buffer.from([0x66, 0x4c, 0x61, 0x43]));
     const pdf = join(dir, 'x.pdf');
     writeFileSync(pdf, Buffer.from([0x25, 0x50, 0x44, 0x46]));
+    const aiff = join(dir, 'x.aiff');
+    writeFileSync(aiff, Buffer.from([0x46, 0x4f, 0x52, 0x4d]));
     const cases: Array<[string, string]> = [
       // audio: a .mp3 is not an accepted stereo master.
       ['track_stereo', mp3],
+      // the API accepts WAV and FLAC stereo masters only — an AIFF is refused.
+      ['track_stereo', aiff],
       // dolby accepts WAV only — a .flac must be rejected.
       ['track_dolby', flac],
       // lyrics: a .wav is not a lyrics file.

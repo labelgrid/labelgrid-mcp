@@ -5,6 +5,20 @@ All notable changes to `@labelgrid/cli` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `labelgrid analytics get` help states the API's current limits: a window of
+  up to 730 days and any number of section keys per request.
+- A 422 refusal that carries its own code reports that code instead of
+  `VALIDATION_FAILED`.
+
+### Fixed
+
+- `labelgrid upload --type stereo` accepts only `.wav` and `.flac`, matching
+  what the API accepts.
+
 ## [0.3.3] - 2026-09-30
 
 ### Changed

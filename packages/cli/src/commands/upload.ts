@@ -33,7 +33,7 @@ const UPLOAD_TYPES: Record<string, UploadSpec> = {
     parent: 'track',
     flow: 'presigned',
     fileType: 'stereo',
-    exts: ['.wav', '.flac', '.aif', '.aiff'],
+    exts: ['.wav', '.flac'],
   },
   dolby: { parent: 'track', flow: 'presigned', fileType: 'dolby', exts: ['.wav'] },
   lyrics: { parent: 'track', flow: 'presigned', fileType: 'lyrics', exts: ['.lrc', '.txt'] },
