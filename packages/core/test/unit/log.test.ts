@@ -62,6 +62,13 @@ describe('redactSecrets', () => {
     expect(config.custom_description).toBe('see [url redacted]');
   });
 
+  it('replaces any scheme:// URL, also when glued to a preceding word', () => {
+    expect(redactSecrets('seehttps://a.test/p?token=t1')).toBe('see[url redacted]');
+    expect(redactSecrets('copy s3://bucket/key?sig=1 now')).toBe('copy [url redacted] now');
+    expect(redactSecrets('ftp://h.test/f?x=1')).toBe('[url redacted]');
+    expect(redactSecrets('a plain sentence: no link')).toBe('a plain sentence: no link');
+  });
+
   it('returns primitives unchanged', () => {
     expect(redactSecrets('hello')).toBe('hello');
     expect(redactSecrets(42)).toBe(42);
@@ -79,6 +86,14 @@ describe('log', () => {
     expect(err).toHaveBeenCalledTimes(1);
     expect(out).not.toHaveBeenCalled();
     expect(String(err.mock.calls[0][0])).toContain('hello world');
+  });
+
+  it('replaces a URL in the message text too', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    log('error', 'config load failed for https://h.test/c?token=abc');
+    const written = String(err.mock.calls[0][0]);
+    expect(written).not.toContain('token=abc');
+    expect(written).toContain('[url redacted]');
   });
 
   it('redacts secret values in the meta before writing', () => {

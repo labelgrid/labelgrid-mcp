@@ -10,9 +10,11 @@ const SECRET_KEY = /token|password|secret|nonce|authorization|key/i;
 // A URL can carry an access token in its query (a signed upload URL, a private
 // preview link, a webhook endpoint), so values under url/link keys are masked,
 // and a URL inside any other logged string is replaced. A boolean or number
-// under such a key (`links_page_enabled`) carries no URL and is kept.
+// under such a key (`links_page_enabled`) carries no URL and is kept. Any
+// `scheme://` URL is matched (https, s3, ftp, …), also when glued to a preceding
+// word; scheme-less forms (`www.…`, `//host/…`) are not.
 const URL_KEY = /url|link/i;
-const URL_IN_TEXT = /\bhttps?:\/\/[^\s"'<>]+/gi;
+const URL_IN_TEXT = /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
 const MASK = '***REDACTED***';
 const URL_MASK = '[url redacted]';
 
@@ -45,7 +47,7 @@ export type LogLevel = 'info' | 'warn' | 'error';
 
 /** Writes a single redacted log line to stderr (never stdout). */
 export function log(level: LogLevel, msg: string, meta?: unknown): void {
-  let line = `[${level}] ${msg}`;
+  let line = `[${level}] ${redactSecrets(msg)}`;
   if (meta !== undefined) {
     line += ` ${JSON.stringify(redactSecrets(meta))}`;
   }
