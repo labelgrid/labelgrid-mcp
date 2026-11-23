@@ -10,6 +10,8 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-23
+
 ### Changed
 
 - A 422 response that carries its own `error_code` or `code` keeps that code on

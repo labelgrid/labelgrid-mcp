@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-23
+
 ### Changed
 
 - `labelgrid analytics get` help states the API's current limits: a window of
   up to 730 days and any number of section keys per request.
 - A 422 refusal that carries its own code reports that code instead of
   `VALIDATION_FAILED`.
+- Depends on `@labelgrid/core` 0.3.0 (was 0.2.1).
 
 ### Fixed
 
