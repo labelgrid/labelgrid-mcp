@@ -14,26 +14,38 @@ const SECRET_KEY = /token|password|secret|nonce|authorization|key/i;
 // `scheme://` URL is matched (https, s3, ftp, …); letters glued in front of the
 // scheme are removed with it. Scheme-less forms (`www.…`, `//host/…`) are not.
 const URL_KEY = /url|link/i;
-// Anchored on the literal `://`, so a match costs one pass over the string; an
-// unanchored scheme run would rescan from every letter (polynomial backtracking).
-const URL_BODY = /:\/\/[^\s"'<>]+/g;
 const SCHEME_CHAR = /[A-Za-z0-9+.-]/;
+const URL_END = /[\s"'<>]/;
 const MASK = '***REDACTED***';
 const URL_MASK = '[url redacted]';
 
-/** Replaces every `scheme://…` URL in `text`, scheme letters included. */
+/**
+ * Replaces every `scheme://…` URL in `text`, scheme letters included. A plain
+ * scan anchored on each literal `://`, not a regex: an unanchored scheme run
+ * would rescan from every letter (polynomial backtracking), and skipping a
+ * whole regex match after a bare `://` would also skip a URL glued after it.
+ * Each character is visited a bounded number of times.
+ */
 function scrubUrls(text: string): string {
   if (!text.includes('://')) return text;
   let out = '';
   let last = 0;
-  for (const m of text.matchAll(URL_BODY)) {
-    const at = m.index ?? 0;
+  let from = 0;
+  for (;;) {
+    const at = text.indexOf('://', from);
+    if (at === -1) break;
     let start = at;
     while (start > last && SCHEME_CHAR.test(text[start - 1] as string)) start--;
-    // A bare `://` with no scheme in front of it is not a URL.
-    if (start === at) continue;
+    if (start === at) {
+      // A bare `://` with no scheme in front is not a URL; keep looking after it.
+      from = at + 3;
+      continue;
+    }
+    let end = at + 3;
+    while (end < text.length && !URL_END.test(text[end] as string)) end++;
     out += text.slice(last, start) + URL_MASK;
-    last = at + m[0].length;
+    last = end;
+    from = end;
   }
   return out + text.slice(last);
 }

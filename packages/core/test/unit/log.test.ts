@@ -69,6 +69,9 @@ describe('redactSecrets', () => {
     expect(redactSecrets('ftp://h.test/f?x=1')).toBe('[url redacted]');
     expect(redactSecrets('a plain sentence: no link')).toBe('a plain sentence: no link');
     expect(redactSecrets('bare ://x stays')).toBe('bare ://x stays');
+    // A URL glued after a bare `://` is still found.
+    expect(redactSecrets('x ://https://h.test/p?token=abc')).toBe('x ://[url redacted]');
+    expect(redactSecrets('(://s3://b/k?sig=1')).toBe('(://[url redacted]');
     expect(redactSecrets('two: a://x and b://y')).toBe('two: [url redacted] and [url redacted]');
   });
 
@@ -77,6 +80,10 @@ describe('redactSecrets', () => {
     const started = Date.now();
     expect(redactSecrets(long)).toBe(long);
     expect(redactSecrets(`${long}://x`)).toBe('[url redacted]');
+    const bare = '://'.repeat(100_000);
+    expect(redactSecrets(bare)).toBe(bare);
+    const many = 'ab://x '.repeat(50_000);
+    expect(redactSecrets(many)).toBe('[url redacted] '.repeat(50_000));
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
