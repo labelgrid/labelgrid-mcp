@@ -224,7 +224,7 @@ labelgrid catalog search --type track --filter release_id=456 --json \
 NOT_FOUND: No release found with that id.
 ```
 
-Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `VALIDATION_FAILED` (422, with field errors, or the server's own code when the 422 carries one), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`.
+Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `VALIDATION_FAILED` (422, with field errors), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`. When the API sends its own code with a 403, 404, 409, 422 or 5xx (for example `TRIAL_PROHIBITED` or `unsupported_audio_format`), that code is reported instead of the generic one; match on the specific codes you handle and fall back to the HTTP status.
 
 ## Destructive commands and confirmation
 

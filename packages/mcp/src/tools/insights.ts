@@ -110,7 +110,7 @@ const getAnalytics: ToolDef = {
     'Streaming analytics summary. Window ≤730 days; `metrics` takes any number of section keys (responses cached). ' +
     'KUGOU/KUWO/QQMUSIC report weekly: one point carries the whole week — never average per day. `meta` carries `platform_cadence`, `section_granularity`, `sections_as_of` and `sections_complete_through` (later dates still filling in). ' +
     'See get_analytics_availability for per-platform support. ' +
-    'Sections aggregate over the filter scope (`upc` gives release totals); for per-track rows use `track-*-daily` (needs a `release_id`, `isrc` or `upc` scope) or get_analytics_rankings. `track-listeners-daily` sums per-entry daily counts: not distinct people, not summable across dates. ' +
+    'Sections aggregate over the filter scope (`upc` gives release totals); for per-track rows use `track-*-daily` (needs a `release_id`, `isrc` or `upc` scope) or get_analytics_rankings. `track-listeners-daily` sums per-entry daily counts: not distinct people, not summable across dates. `track-*-daily` refuses tracks × days × platforms over 50,000: narrow the window. ' +
     '`downloads`: daily units (Amazon), net of refunds (can be negative), never streams; no row up to `sections_complete_through.downloads` means zero. ' +
     '`social-*` / `*-engagement` cover social/UGC usage, not streaming: `platform` is a UGC platform, `ugc_platform` narrows them; use, view and play are distinct quantities never summed together or with streams. Selecting any adds `meta.social_availability` (which UGC platforms report each signal); the streaming matrix omits them. ' +
     'Rate-limited ~60/min, plus a separate ~30/min for windows over 90 days; a 429 carries retry_after_seconds.',

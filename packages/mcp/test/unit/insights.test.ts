@@ -88,9 +88,15 @@ describe('get_analytics', () => {
     expect(thirteen).toHaveLength(13);
     // The server accepts every section in one request; the old 12-key cap is gone.
     expect(schema.safeParse({ ...base, metrics: thirteen }).success).toBe(true);
-    // The ceiling is the number of section keys (49).
-    expect(schema.safeParse({ ...base, metrics: Array(49).fill('streams') }).success).toBe(true);
-    expect(schema.safeParse({ ...base, metrics: Array(50).fill('streams') }).success).toBe(false);
+    // The enum holds 49 distinct section keys, and all of them fit one request.
+    const shape = byName('get_analytics').inputShape.metrics as z.ZodArray<
+      z.ZodEnum<[string, ...string[]]>
+    >;
+    const all = shape.element.options;
+    expect(new Set(all).size).toBe(49);
+    expect(all).toEqual(expect.arrayContaining(['downloads', 'tiktok-engagement']));
+    expect(schema.safeParse({ ...base, metrics: all }).success).toBe(true);
+    expect(schema.safeParse({ ...base, metrics: [...all, 'streams'] }).success).toBe(false);
   });
 
   it('accepts the downloads section and sends it as metrics[]=downloads', async () => {

@@ -278,7 +278,7 @@ const enableBeatport: ToolDef = {
     record_label_name: z.string().optional().describe('Name on Beatport; required if listed.'),
     beatport_genres: z.array(z.string().trim().min(1)).min(1).describe('Beatport genre names.'),
     release_link: z.string().optional(),
-    associated_artists: z.string().optional(),
+    associated_artists: z.string().optional().describe('Required if the label has no releases.'),
     release_schedule: z.string().optional(),
   },
   annotations: { destructiveHint: true },

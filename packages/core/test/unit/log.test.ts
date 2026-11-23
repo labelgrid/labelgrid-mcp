@@ -48,6 +48,20 @@ describe('redactSecrets', () => {
     expect(out.label_id).toBe(3);
   });
 
+  it('replaces a URL inside any logged string, and keeps a boolean under a link key', () => {
+    const out = redactSecrets({
+      release_schedule: 'monthly, preview at https://preview.example.test/r/1?access=abc123 first',
+      config: { links_page_enabled: true, custom_description: 'see http://x.example.test/a?t=1' },
+      message: 'request to https://api.example.test/v1?sig=zz failed',
+    }) as Record<string, unknown>;
+    expect(out.release_schedule).toBe('monthly, preview at [url redacted] first');
+    expect(JSON.stringify(out)).not.toContain('abc123');
+    expect(JSON.stringify(out)).not.toContain('sig=zz');
+    const config = out.config as Record<string, unknown>;
+    expect(config.links_page_enabled).toBe(true);
+    expect(config.custom_description).toBe('see [url redacted]');
+  });
+
   it('returns primitives unchanged', () => {
     expect(redactSecrets('hello')).toBe('hello');
     expect(redactSecrets(42)).toBe(42);

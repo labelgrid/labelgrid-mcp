@@ -13,8 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `labelgrid analytics get` help states the API's current limits: a window of
   up to 730 days and any number of section keys per request.
-- A 422 refusal that carries its own code reports that code instead of
-  `VALIDATION_FAILED`.
+- Error codes follow the API more closely, which can change what a script
+  matches on. When the API sends its own code (`code` or `error_code`), a 403,
+  404, 409, 422 or 5xx error now reports that code instead of `FORBIDDEN`,
+  `NOT_FOUND`, `CONFLICT`, `VALIDATION_FAILED` or `SERVER_ERROR`; without one,
+  the generic code is kept. A field-validation 422 still reports
+  `VALIDATION_FAILED`. Errors printed with `--json` may also carry `details`
+  and `blocking_issues`.
 - Depends on `@labelgrid/core` 0.3.0 (was 0.2.1).
 
 ### Fixed

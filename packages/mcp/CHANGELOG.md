@@ -37,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Logged tool arguments mask values under keys containing `url` or `link`
-  (for example `release_link`), since a URL can carry an access token.
+  (for example `release_link`), and any URL inside another logged string is
+  replaced, since a URL can carry an access token.
 
 ## [0.8.3] - 2026-11-18
 

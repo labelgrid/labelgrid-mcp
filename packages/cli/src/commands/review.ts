@@ -11,7 +11,7 @@ import type { Command } from 'commander';
 import { confirmOrAbort } from '../confirm.js';
 import type { GlobalOpts, Resolved } from '../context.js';
 import { buildContext } from '../context.js';
-import { commaList, failWith, runApi } from '../run.js';
+import { failWith, runApi } from '../run.js';
 
 export function registerReview(program: Command, resolved: Resolved): void {
   const review = program.command('review').description('Release review issues and QC reports');
@@ -70,7 +70,10 @@ export function registerBeatport(program: Command, resolved: Resolved): void {
     .requiredOption('--genres <list>', 'comma-separated Beatport genre names (at least one)')
     .option('--label-name <name>', 'the label name on Beatport (required with --listed yes)')
     .option('--release-link <url>', 'a link to the latest release')
-    .option('--artists <text>', 'artists associated with the label')
+    .option(
+      '--artists <text>',
+      'artists associated with the label (required when the label has no releases yet)',
+    )
     .option('--schedule <text>', 'the planned release schedule')
     .action(
       async (
@@ -90,9 +93,14 @@ export function registerBeatport(program: Command, resolved: Resolved): void {
         if (listed !== 'yes' && listed !== 'no') {
           cmd.error('Pass --listed yes or --listed no.');
         }
-        const genres = commaList(opts.genres) ?? [];
-        if (genres.length === 0) {
+        // Split by hand rather than with commaList, which drops blank segments:
+        // a blank entry (an unset shell variable) is refused, not silently lost.
+        const genres = opts.genres.split(',').map((g) => g.trim());
+        if (genres.every((g) => g === '')) {
           cmd.error('Pass at least one genre name in --genres.');
+        }
+        if (genres.some((g) => g === '')) {
+          cmd.error('--genres has an empty entry; pass each genre name between commas.');
         }
         const labelName = opts.labelName?.trim() ?? '';
         if (listed === 'yes' && labelName === '') {

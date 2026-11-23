@@ -375,29 +375,40 @@ describe('beatport enable', () => {
     ]);
   });
 
-  it('refuses a missing or malformed --listed and an empty --genres before any call', async () => {
-    for (const argv of [
-      ['beatport', 'enable', '--label', '3', '--genres', 'House', '--yes'],
-      ['beatport', 'enable', '--label', '3', '--listed', 'maybe', '--genres', 'House', '--yes'],
-      ['beatport', 'enable', '--label', '3', '--listed', 'no', '--genres', ' , ', '--yes'],
-      ['beatport', 'enable', '--label', '3', '--listed', 'yes', '--genres', 'House', '--yes'],
+  it('refuses each malformed request before any call, for its own reason', async () => {
+    const cmd = ['beatport', 'enable', '--label', '3'];
+    const cases: Array<[string[], string]> = [
+      [[...cmd, '--genres', 'House', '--yes'], '--listed'],
+      [[...cmd, '--listed', 'maybe', '--genres', 'House', '--yes'], '--listed yes or --listed no'],
+      [[...cmd, '--listed', 'no', '--genres', ' , ', '--yes'], 'at least one genre name'],
+      [[...cmd, '--listed', 'no', '--genres', 'House, ,Techno', '--yes'], 'empty entry'],
+      [[...cmd, '--listed', 'yes', '--genres', 'House', '--yes'], '--label-name'],
       [
-        'beatport',
-        'enable',
-        '--label',
-        '3',
-        '--listed',
-        'yes',
-        '--genres',
-        'House',
+        [...cmd, '--listed', 'yes', '--genres', 'House', '--label-name', '  ', '--yes'],
         '--label-name',
-        '  ',
-        '--yes',
       ],
-    ]) {
+    ];
+    for (const [argv, reason] of cases) {
       const r = await run(argv);
       expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain(reason);
       expect(r.calls).toHaveLength(0);
     }
+  });
+
+  it('sends the optional onboarding details when given', async () => {
+    const r = await run([
+      ...['beatport', 'enable', '--label', '3', '--listed', 'no', '--genres', 'House'],
+      ...['--release-link', 'https://example.test/r', '--artists', 'A, B', '--schedule', 'monthly'],
+      '--yes',
+    ]);
+    expect(r.code).toBe(0);
+    expect(r.calls[0].args[1]).toEqual({
+      is_label_listed_on_beatport: false,
+      beatport_genres: ['House'],
+      release_link: 'https://example.test/r',
+      associated_artists: 'A, B',
+      release_schedule: 'monthly',
+    });
   });
 });

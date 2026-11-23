@@ -21,8 +21,9 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ### Security
 
-- Log redaction also masks values under keys containing `url` or `link`, since
-  a URL can carry an access token in its query string.
+- Log redaction also masks string values under keys containing `url` or
+  `link`, and replaces any URL inside other logged strings, since a URL can
+  carry an access token in its query string.
 
 ## [0.2.4] - 2026-11-09
 
