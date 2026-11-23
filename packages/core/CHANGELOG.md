@@ -19,6 +19,11 @@ server and CLI — there are no API-stability promises before 1.0.
   responses already did. A 422 without one, or with the generic
   `validation_failed`, still maps to `VALIDATION_FAILED`.
 
+### Security
+
+- Log redaction also masks values under keys containing `url` or `link`, since
+  a URL can carry an access token in its query string.
+
 ## [0.2.4] - 2026-11-09
 
 ### Changed

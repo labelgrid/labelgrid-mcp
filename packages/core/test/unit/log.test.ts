@@ -35,6 +35,19 @@ describe('redactSecrets', () => {
     expect(out.nonce).toBe('***REDACTED***');
   });
 
+  it('masks URL- and link-valued keys, which can carry an access token', () => {
+    const out = redactSecrets({
+      release_link: 'https://preview.example.test/r/1?access=abc123',
+      upload_url: 'https://storage.example.test/obj?X-Signature=s',
+      config: { pre_order_links: ['https://store.example.test/p?ref=t'] },
+      label_id: 3,
+    }) as Record<string, unknown>;
+    expect(out.release_link).toBe('***REDACTED***');
+    expect(out.upload_url).toBe('***REDACTED***');
+    expect((out.config as Record<string, unknown>).pre_order_links).toBe('***REDACTED***');
+    expect(out.label_id).toBe(3);
+  });
+
   it('returns primitives unchanged', () => {
     expect(redactSecrets('hello')).toBe('hello');
     expect(redactSecrets(42)).toBe(42);

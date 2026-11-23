@@ -94,6 +94,10 @@ export function registerBeatport(program: Command, resolved: Resolved): void {
         if (genres.length === 0) {
           cmd.error('Pass at least one genre name in --genres.');
         }
+        const labelName = opts.labelName?.trim() ?? '';
+        if (listed === 'yes' && labelName === '') {
+          cmd.error('Pass --label-name (the name as listed on Beatport) with --listed yes.');
+        }
         await confirmOrAbort(
           ctx.out,
           `request Beatport onboarding for label ${opts.label} (pending requests will not be duplicated)`,
@@ -104,7 +108,7 @@ export function registerBeatport(program: Command, resolved: Resolved): void {
           ctx,
           ctx.client.post(`/labels/${encodeURIComponent(opts.label)}/enable-beatport`, {
             is_label_listed_on_beatport: listed === 'yes',
-            record_label_name: opts.labelName,
+            record_label_name: labelName === '' ? undefined : labelName,
             beatport_genres: genres,
             release_link: opts.releaseLink,
             associated_artists: opts.artists,

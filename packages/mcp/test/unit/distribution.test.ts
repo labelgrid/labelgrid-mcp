@@ -447,9 +447,14 @@ describe('standalone distribution actions', () => {
 
   it('enable_beatport requires the listing flag and at least one genre via zod', () => {
     const schema = z.object(byName('enable_beatport').inputShape);
-    expect(schema.safeParse({ label_id: 3 }).success).toBe(false);
+    // Only the flag is missing, so its requiredness alone decides the result.
+    expect(schema.safeParse({ label_id: 3, beatport_genres: ['House'] }).success).toBe(false);
     expect(
       schema.safeParse({ label_id: 3, is_label_listed_on_beatport: false, beatport_genres: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ label_id: 3, is_label_listed_on_beatport: false, beatport_genres: ['  '] })
         .success,
     ).toBe(false);
     expect(
@@ -459,5 +464,22 @@ describe('standalone distribution actions', () => {
         beatport_genres: ['House'],
       }).success,
     ).toBe(true);
+  });
+
+  it('enable_beatport refuses a listed label with no name before any request', async () => {
+    for (const record_label_name of [undefined, '   ']) {
+      const { fetchFn, ctx } = harness();
+      const r = await byName('enable_beatport').handler(
+        {
+          label_id: 3,
+          is_label_listed_on_beatport: true,
+          record_label_name,
+          beatport_genres: ['House'],
+        },
+        ctx,
+      );
+      expect('error' in r && r.error.message).toContain('record_label_name');
+      expect(fetchFn).not.toHaveBeenCalled();
+    }
   });
 });

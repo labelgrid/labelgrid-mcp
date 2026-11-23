@@ -31,7 +31,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `is_label_listed_on_beatport` and one or more `beatport_genres`, plus
   `record_label_name` when the label is already listed, and the optional
   `release_link`, `associated_artists` and `release_schedule`. The tool sent no
-  request body before, so the API refused every request.
+  request body before, so the API refused every request. A listed label with
+  no name, or a blank genre name, is refused before the request is sent.
+
+### Security
+
+- Logged tool arguments mask values under keys containing `url` or `link`
+  (for example `release_link`), since a URL can carry an access token.
 
 ## [0.8.3] - 2026-11-18
 

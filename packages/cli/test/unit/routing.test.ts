@@ -347,14 +347,17 @@ describe('beatport enable', () => {
     'yes',
     '--genres',
     'House, Techno',
+    '--label-name',
+    'Night Shift',
   ];
 
   it('is confirm-gated and sends the onboarding body to the label endpoint', async () => {
+    // A valid request without --yes: only the confirmation gate stops it.
     const blocked = await run(base);
     expect(blocked.code).toBe(1);
     expect(blocked.calls).toHaveLength(0);
 
-    const r = await run([...base, '--label-name', 'Night Shift', '--yes']);
+    const r = await run([...base, '--yes']);
     expect(r.code).toBe(0);
     expect(r.calls).toEqual([
       {
@@ -377,6 +380,20 @@ describe('beatport enable', () => {
       ['beatport', 'enable', '--label', '3', '--genres', 'House', '--yes'],
       ['beatport', 'enable', '--label', '3', '--listed', 'maybe', '--genres', 'House', '--yes'],
       ['beatport', 'enable', '--label', '3', '--listed', 'no', '--genres', ' , ', '--yes'],
+      ['beatport', 'enable', '--label', '3', '--listed', 'yes', '--genres', 'House', '--yes'],
+      [
+        'beatport',
+        'enable',
+        '--label',
+        '3',
+        '--listed',
+        'yes',
+        '--genres',
+        'House',
+        '--label-name',
+        '  ',
+        '--yes',
+      ],
     ]) {
       const r = await run(argv);
       expect(r.code).not.toBe(0);

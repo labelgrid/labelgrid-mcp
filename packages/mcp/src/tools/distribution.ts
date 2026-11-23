@@ -276,21 +276,32 @@ const enableBeatport: ToolDef = {
     label_id: z.number().int().positive().describe('The label id.'),
     is_label_listed_on_beatport: z.boolean(),
     record_label_name: z.string().optional().describe('Name on Beatport; required if listed.'),
-    beatport_genres: z.array(z.string()).min(1).describe('Beatport genre names.'),
+    beatport_genres: z.array(z.string().trim().min(1)).min(1).describe('Beatport genre names.'),
     release_link: z.string().optional(),
     associated_artists: z.string().optional(),
     release_schedule: z.string().optional(),
   },
   annotations: { destructiveHint: true },
-  handler: (args, { client }) =>
-    client.post(`/labels/${args.label_id}/enable-beatport`, {
+  handler: (args, { client }) => {
+    const name = typeof args.record_label_name === 'string' ? args.record_label_name.trim() : '';
+    if (args.is_label_listed_on_beatport === true && name === '') {
+      return Promise.resolve({
+        error: {
+          code: 'INVALID_SELECTOR',
+          message: 'record_label_name is required when is_label_listed_on_beatport is true.',
+          status: 0,
+        },
+      });
+    }
+    return client.post(`/labels/${args.label_id}/enable-beatport`, {
       is_label_listed_on_beatport: args.is_label_listed_on_beatport,
-      record_label_name: args.record_label_name,
+      record_label_name: name === '' ? undefined : name,
       beatport_genres: args.beatport_genres,
       release_link: args.release_link,
       associated_artists: args.associated_artists,
       release_schedule: args.release_schedule,
-    }),
+    });
+  },
 };
 
 export const distributionTools: ToolDef[] = [

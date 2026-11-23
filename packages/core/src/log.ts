@@ -6,7 +6,9 @@
  * first so tokens, passwords and signed URLs never reach the log.
  */
 
-const SECRET_KEY = /token|password|secret|nonce|authorization|key/i;
+// `url` and `link` are masked too: a URL can carry an access token in its query
+// (a signed upload URL, a private preview link, a webhook endpoint).
+const SECRET_KEY = /token|password|secret|nonce|authorization|key|url|link/i;
 const MASK = '***REDACTED***';
 
 /**
