@@ -425,10 +425,39 @@ describe('standalone distribution actions', () => {
     });
   });
 
-  it('enable_beatport → POST /labels/{id}/enable-beatport', async () => {
+  it('enable_beatport → POST /labels/{id}/enable-beatport with the onboarding body', async () => {
     const { fetchFn, ctx } = harness();
-    await byName('enable_beatport').handler({ label_id: 3 }, ctx);
+    await byName('enable_beatport').handler(
+      {
+        label_id: 3,
+        is_label_listed_on_beatport: true,
+        record_label_name: 'Night Shift',
+        beatport_genres: ['House', 'Techno'],
+      },
+      ctx,
+    );
     expect(last(fetchFn).init.method).toBe('POST');
     expect(last(fetchFn).url).toContain('/labels/3/enable-beatport');
+    expect(JSON.parse(String(last(fetchFn).init.body))).toEqual({
+      is_label_listed_on_beatport: true,
+      record_label_name: 'Night Shift',
+      beatport_genres: ['House', 'Techno'],
+    });
+  });
+
+  it('enable_beatport requires the listing flag and at least one genre via zod', () => {
+    const schema = z.object(byName('enable_beatport').inputShape);
+    expect(schema.safeParse({ label_id: 3 }).success).toBe(false);
+    expect(
+      schema.safeParse({ label_id: 3, is_label_listed_on_beatport: false, beatport_genres: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        label_id: 3,
+        is_label_listed_on_beatport: false,
+        beatport_genres: ['House'],
+      }).success,
+    ).toBe(true);
   });
 });

@@ -27,8 +27,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 // `replace_with` costs ~108 tokens at its tightest, and trimming that far would
 // have meant cutting documentation from unrelated tools to pay for it. Raised to
 // keep the gate tight (~200 tokens of headroom) rather than to clear the way.
+// Raised again from 8300 when the catalog sat at ~8299: `enable_beatport` sent
+// no request body, so every call was refused, and its required fields cost
+// ~103 tokens. Same rule: ~200 tokens of headroom, not more.
 // Trim before raising this again.
-const BUDGET_TOKENS = 8300;
+const BUDGET_TOKENS = 8600;
 
 const PACKAGES = resolve(new URL('.', import.meta.url).pathname, '../packages');
 

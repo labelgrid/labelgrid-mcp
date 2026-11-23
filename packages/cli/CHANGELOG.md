@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `labelgrid upload --type stereo` accepts only `.wav` and `.flac`, matching
   what the API accepts.
+- `labelgrid beatport enable` takes the onboarding details the API requires:
+  `--listed <yes|no>` and `--genres <list>` (required), `--label-name` (when
+  listed), and the optional `--release-link`, `--artists` and `--schedule`.
+  The command sent no request body before, so the API refused every request.
 
 ## [0.3.3] - 2026-09-30
 

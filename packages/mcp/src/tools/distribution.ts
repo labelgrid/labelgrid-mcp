@@ -272,9 +272,25 @@ const enableBeatport: ToolDef = {
   title: 'Request Beatport onboarding for a label',
   description:
     'Request Beatport onboarding for a label. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request. Confirm the label is correct first.',
-  inputShape: { label_id: z.number().int().positive().describe('The label id.') },
+  inputShape: {
+    label_id: z.number().int().positive().describe('The label id.'),
+    is_label_listed_on_beatport: z.boolean(),
+    record_label_name: z.string().optional().describe('Name on Beatport; required if listed.'),
+    beatport_genres: z.array(z.string()).min(1).describe('Beatport genre names.'),
+    release_link: z.string().optional(),
+    associated_artists: z.string().optional(),
+    release_schedule: z.string().optional(),
+  },
   annotations: { destructiveHint: true },
-  handler: (args, { client }) => client.post(`/labels/${args.label_id}/enable-beatport`),
+  handler: (args, { client }) =>
+    client.post(`/labels/${args.label_id}/enable-beatport`, {
+      is_label_listed_on_beatport: args.is_label_listed_on_beatport,
+      record_label_name: args.record_label_name,
+      beatport_genres: args.beatport_genres,
+      release_link: args.release_link,
+      associated_artists: args.associated_artists,
+      release_schedule: args.release_schedule,
+    }),
 };
 
 export const distributionTools: ToolDef[] = [

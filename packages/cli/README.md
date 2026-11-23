@@ -198,10 +198,10 @@ labelgrid review issues --release 456
 
 ### `beatport` — Beatport onboarding
 
-`enable --label <id>` — request Beatport onboarding (confirmed). Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request.
+`enable --label <id> --listed <yes|no> --genres <list>` — request Beatport onboarding (confirmed). `--listed` says whether the label is already on Beatport; with `--listed yes`, also pass `--label-name` (the name as listed there). `--genres` takes one or more comma-separated Beatport genre names. Optional: `--release-link`, `--artists`, `--schedule`. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request.
 
 ```bash
-labelgrid beatport enable --label 123
+labelgrid beatport enable --label 123 --listed no --genres "House,Tech House"
 ```
 
 ## `--json` and scripting

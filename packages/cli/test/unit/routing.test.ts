@@ -338,15 +338,49 @@ describe('review', () => {
 });
 
 describe('beatport enable', () => {
-  it('is confirm-gated and routes to the label endpoint', async () => {
-    const blocked = await run(['beatport', 'enable', '--label', '3']);
+  const base = [
+    'beatport',
+    'enable',
+    '--label',
+    '3',
+    '--listed',
+    'yes',
+    '--genres',
+    'House, Techno',
+  ];
+
+  it('is confirm-gated and sends the onboarding body to the label endpoint', async () => {
+    const blocked = await run(base);
     expect(blocked.code).toBe(1);
     expect(blocked.calls).toHaveLength(0);
 
-    const r = await run(['beatport', 'enable', '--label', '3', '--yes']);
+    const r = await run([...base, '--label-name', 'Night Shift', '--yes']);
     expect(r.code).toBe(0);
     expect(r.calls).toEqual([
-      { method: 'post', args: ['/labels/3/enable-beatport', undefined, undefined] },
+      {
+        method: 'post',
+        args: [
+          '/labels/3/enable-beatport',
+          {
+            is_label_listed_on_beatport: true,
+            record_label_name: 'Night Shift',
+            beatport_genres: ['House', 'Techno'],
+          },
+          undefined,
+        ],
+      },
     ]);
+  });
+
+  it('refuses a missing or malformed --listed and an empty --genres before any call', async () => {
+    for (const argv of [
+      ['beatport', 'enable', '--label', '3', '--genres', 'House', '--yes'],
+      ['beatport', 'enable', '--label', '3', '--listed', 'maybe', '--genres', 'House', '--yes'],
+      ['beatport', 'enable', '--label', '3', '--listed', 'no', '--genres', ' , ', '--yes'],
+    ]) {
+      const r = await run(argv);
+      expect(r.code).not.toBe(0);
+      expect(r.calls).toHaveLength(0);
+    }
   });
 });

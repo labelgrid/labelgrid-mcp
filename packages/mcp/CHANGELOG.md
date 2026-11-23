@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `upload_asset` accepts only WAV and FLAC for `track_stereo`, matching what
   the API accepts. AIFF files were refused by the server after upload.
+- `enable_beatport` sends the onboarding details the API requires:
+  `is_label_listed_on_beatport` and one or more `beatport_genres`, plus
+  `record_label_name` when the label is already listed, and the optional
+  `release_link`, `associated_artists` and `release_schedule`. The tool sent no
+  request body before, so the API refused every request.
 
 ## [0.8.3] - 2026-11-18
 
