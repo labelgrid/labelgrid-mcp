@@ -172,7 +172,7 @@ labelgrid royalties breakdown --group-by release,dsp --filter start_date=2026-01
 
 ### `analytics` — streaming analytics
 
-`get --start <date> --end <date> --metrics <list>` (max 400-day window; 1-12 section keys per request), optionally `--platform`, `--release-id`, `--isrc`, `--upc`. `availability` prints the section-by-platform availability matrix and each platform's reporting cadence (daily or weekly).
+`get --start <date> --end <date> --metrics <list>` (max 730-day window; any number of section keys per request), optionally `--platform`, `--release-id`, `--isrc`, `--upc`. `availability` prints the section-by-platform availability matrix and each platform's reporting cadence (daily or weekly).
 
 ```bash
 labelgrid analytics get --start 2026-06-01 --end 2026-06-28 --metrics streams,listeners
@@ -198,10 +198,10 @@ labelgrid review issues --release 456
 
 ### `beatport` — Beatport onboarding
 
-`enable --label <id>` — request Beatport onboarding (confirmed). Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request.
+`enable --label <id> --listed <yes|no> --genres <list>` — request Beatport onboarding (confirmed). `--listed` says whether the label is already on Beatport; with `--listed yes`, also pass `--label-name` (the name as listed there). `--genres` takes one or more comma-separated Beatport genre names. Optional: `--release-link`, `--artists`, `--schedule`. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request.
 
 ```bash
-labelgrid beatport enable --label 123
+labelgrid beatport enable --label 123 --listed no --genres "House,Tech House"
 ```
 
 ## `--json` and scripting
@@ -224,7 +224,7 @@ labelgrid catalog search --type track --filter release_id=456 --json \
 NOT_FOUND: No release found with that id.
 ```
 
-Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `VALIDATION_FAILED` (422, with field errors), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`.
+Common codes match the API: `TOKEN_INVALID` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `VALIDATION_FAILED` (422, with field errors), `RATE_LIMITED` (429), `SERVER_ERROR` (5xx), plus local ones such as `NO_TOKEN`, `INVALID_PATH`, `FILE_EXISTS`, and `NETWORK_ERROR`. When the API sends its own code with a 403, 404, 409, 422 or 5xx (for example `TRIAL_PROHIBITED` or `unsupported_audio_format`), that code is reported instead of the generic one; match on the specific codes you handle and fall back to the HTTP status.
 
 ## Destructive commands and confirmation
 
@@ -249,7 +249,7 @@ Anything other than `y`/`yes` aborts (exit 1) before any API call. Pass `--yes` 
 
 **Uploads** are guarded before any byte leaves your machine:
 
-- Each `--type` has a file-extension allowlist (for example `stereo` accepts `.wav`/`.flac`/`.aif`/`.aiff`; `cover-art` accepts common image formats), so the CLI cannot be pointed at an arbitrary file.
+- Each `--type` has a file-extension allowlist (for example `stereo` accepts `.wav`/`.flac`; `cover-art` accepts common image formats), so the CLI cannot be pointed at an arbitrary file.
 - Symlinks are resolved first and the allowlist is applied to the real target.
 - The parent flag must match the type: track asset types require `--track`, release asset types require `--release`.
 - Uploaded assets become immutable once the release is distributed — upload final files before distributing.

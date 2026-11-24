@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-23
+
+### Added
+
+- `get_analytics` accepts the `downloads` section (daily download units, net
+  of refunds) and the `tiktok-engagement` social section.
+
+### Changed
+
+- `get_analytics` follows the API's current limits: a window of up to 730 days,
+  and any number of section keys in one request (the 12-key cap is gone).
+- A 422 refusal that carries its own code (for example
+  `unsupported_audio_format` or `active_label_cap_exceeded`) now reports that
+  code instead of `VALIDATION_FAILED`. A plain field-validation 422 still
+  reports `VALIDATION_FAILED`.
+
+### Fixed
+
+- `upload_asset` accepts only WAV and FLAC for `track_stereo`, matching what
+  the API accepts. AIFF files were refused by the server after upload.
+- `enable_beatport` sends the onboarding details the API requires:
+  `is_label_listed_on_beatport` and one or more `beatport_genres`, plus
+  `record_label_name` when the label is already listed, and the optional
+  `release_link`, `associated_artists` and `release_schedule`. The tool sent no
+  request body before, so the API refused every request. A listed label with
+  no name, or a blank genre name, is refused before the request is sent.
+
+### Security
+
+- Logged tool arguments mask values under keys containing `url` or `link`
+  (for example `release_link`), and any URL inside another logged string is
+  replaced, since a URL can carry an access token.
+
 ## [0.8.3] - 2026-11-18
 
 ### Added

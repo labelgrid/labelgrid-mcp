@@ -212,11 +212,21 @@ function normalizeError(res: Response, body: unknown): ApiError {
         server.message ?? 'The request conflicts with the current state.',
       );
     case 422:
-      return withCommon('VALIDATION_FAILED', server.message ?? 'The submitted data was invalid.', {
-        ...(server.errors_structured !== undefined
-          ? { errors_structured: server.errors_structured }
-          : {}),
-      });
+      // A refusal with its own code keeps it. A plain field-validation failure
+      // stays VALIDATION_FAILED, including where the server labels it
+      // `validation_failed` (the track-file endpoints do), so one condition has
+      // one code.
+      return withCommon(
+        server.code === undefined || server.code === 'validation_failed'
+          ? 'VALIDATION_FAILED'
+          : server.code,
+        server.message ?? 'The submitted data was invalid.',
+        {
+          ...(server.errors_structured !== undefined
+            ? { errors_structured: server.errors_structured }
+            : {}),
+        },
+      );
     case 429: {
       const retryAfter = parseRetryAfter(res);
       return withCommon('RATE_LIMITED', server.message ?? 'Rate limit exceeded.', {

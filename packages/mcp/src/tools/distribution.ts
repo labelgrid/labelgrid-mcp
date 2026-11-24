@@ -16,7 +16,7 @@ import type { ToolDef } from './types.js';
 
 /** Per-target upload extension allow-lists: an upload tool never reads an arbitrary file. */
 const TRACK_UPLOAD_EXTS: Record<string, string[]> = {
-  track_stereo: ['.wav', '.flac', '.aif', '.aiff'],
+  track_stereo: ['.wav', '.flac'],
   track_dolby: ['.wav'],
   track_lyrics: ['.lrc', '.txt'],
 };
@@ -83,7 +83,7 @@ const uploadAsset: ToolDef = {
   title: 'Upload a release/track asset',
   description:
     'Upload a finalized track or release asset from a local file. ' +
-    '`track_stereo` (WAV/FLAC/AIFF), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
+    '`track_stereo` (WAV/FLAC), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). ' +
     '`release_cover_art` uploads or replaces the static cover art image. ' +
     '`release_motion_square`/`release_motion_tall` upload the animated cover (motion artwork) video, also asynchronous. ' +
     'All assets become immutable once the release is distributed — upload final files first.',
@@ -272,9 +272,36 @@ const enableBeatport: ToolDef = {
   title: 'Request Beatport onboarding for a label',
   description:
     'Request Beatport onboarding for a label. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request. Confirm the label is correct first.',
-  inputShape: { label_id: z.number().int().positive().describe('The label id.') },
+  inputShape: {
+    label_id: z.number().int().positive().describe('The label id.'),
+    is_label_listed_on_beatport: z.boolean(),
+    record_label_name: z.string().optional().describe('Name on Beatport; required if listed.'),
+    beatport_genres: z.array(z.string().trim().min(1)).min(1).describe('Beatport genre names.'),
+    release_link: z.string().optional(),
+    associated_artists: z.string().optional().describe('Required if the label has no releases.'),
+    release_schedule: z.string().optional(),
+  },
   annotations: { destructiveHint: true },
-  handler: (args, { client }) => client.post(`/labels/${args.label_id}/enable-beatport`),
+  handler: (args, { client }) => {
+    const name = typeof args.record_label_name === 'string' ? args.record_label_name.trim() : '';
+    if (args.is_label_listed_on_beatport === true && name === '') {
+      return Promise.resolve({
+        error: {
+          code: 'INVALID_SELECTOR',
+          message: 'record_label_name is required when is_label_listed_on_beatport is true.',
+          status: 0,
+        },
+      });
+    }
+    return client.post(`/labels/${args.label_id}/enable-beatport`, {
+      is_label_listed_on_beatport: args.is_label_listed_on_beatport,
+      record_label_name: name === '' ? undefined : name,
+      beatport_genres: args.beatport_genres,
+      release_link: args.release_link,
+      associated_artists: args.associated_artists,
+      release_schedule: args.release_schedule,
+    });
+  },
 };
 
 export const distributionTools: ToolDef[] = [

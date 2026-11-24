@@ -60,6 +60,17 @@ describe('upload — presigned track assets', () => {
     expect(r.stderr).toContain('FILE_TYPE_NOT_ALLOWED');
     expect(r.calls).toHaveLength(0);
   });
+
+  it('an AIFF stereo master is rejected before any call (the API accepts WAV and FLAC only)', async () => {
+    for (const name of ['master.aif', 'master.aiff']) {
+      const p = join(dir, name);
+      writeFileSync(p, 'bytes');
+      const r = await run(['upload', p, '--track', '4', '--type', 'stereo']);
+      expect(r.code).toBe(1);
+      expect(r.stderr).toContain('FILE_TYPE_NOT_ALLOWED');
+      expect(r.calls).toHaveLength(0);
+    }
+  });
 });
 
 describe('upload — cover art (multipart)', () => {

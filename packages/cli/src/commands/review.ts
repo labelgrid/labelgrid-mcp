@@ -66,17 +66,63 @@ export function registerBeatport(program: Command, resolved: Resolved): void {
       'Request Beatport onboarding for a label; declined or canceled requests can be retried',
     )
     .requiredOption('--label <id>', 'the label id')
-    .action(async (opts: { label: string }, cmd: Command) => {
-      const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
-      await confirmOrAbort(
-        ctx.out,
-        `request Beatport onboarding for label ${opts.label} (pending requests will not be duplicated)`,
-        ctx.yes,
-        ctx.readLine,
-      );
-      await runApi(
-        ctx,
-        ctx.client.post(`/labels/${encodeURIComponent(opts.label)}/enable-beatport`),
-      );
-    });
+    .requiredOption('--listed <yes|no>', 'whether the label is already listed on Beatport')
+    .requiredOption('--genres <list>', 'comma-separated Beatport genre names (at least one)')
+    .option('--label-name <name>', 'the label name on Beatport (required with --listed yes)')
+    .option('--release-link <url>', 'a link to the latest release')
+    .option(
+      '--artists <text>',
+      'artists associated with the label (required when the label has no releases yet)',
+    )
+    .option('--schedule <text>', 'the planned release schedule')
+    .action(
+      async (
+        opts: {
+          label: string;
+          listed: string;
+          genres: string;
+          labelName?: string;
+          releaseLink?: string;
+          artists?: string;
+          schedule?: string;
+        },
+        cmd: Command,
+      ) => {
+        const ctx = buildContext(resolved, cmd.optsWithGlobals<GlobalOpts>());
+        const listed = opts.listed.toLowerCase();
+        if (listed !== 'yes' && listed !== 'no') {
+          cmd.error('Pass --listed yes or --listed no.');
+        }
+        // Split by hand rather than with commaList, which drops blank segments:
+        // a blank entry (an unset shell variable) is refused, not silently lost.
+        const genres = opts.genres.split(',').map((g) => g.trim());
+        if (genres.every((g) => g === '')) {
+          cmd.error('Pass at least one genre name in --genres.');
+        }
+        if (genres.some((g) => g === '')) {
+          cmd.error('--genres has an empty entry; pass each genre name between commas.');
+        }
+        const labelName = opts.labelName?.trim() ?? '';
+        if (listed === 'yes' && labelName === '') {
+          cmd.error('Pass --label-name (the name as listed on Beatport) with --listed yes.');
+        }
+        await confirmOrAbort(
+          ctx.out,
+          `request Beatport onboarding for label ${opts.label} (pending requests will not be duplicated)`,
+          ctx.yes,
+          ctx.readLine,
+        );
+        await runApi(
+          ctx,
+          ctx.client.post(`/labels/${encodeURIComponent(opts.label)}/enable-beatport`, {
+            is_label_listed_on_beatport: listed === 'yes',
+            record_label_name: labelName === '' ? undefined : labelName,
+            beatport_genres: genres,
+            release_link: opts.releaseLink,
+            associated_artists: opts.artists,
+            release_schedule: opts.schedule,
+          }),
+        );
+      },
+    );
 }

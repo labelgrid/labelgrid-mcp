@@ -35,6 +35,58 @@ describe('redactSecrets', () => {
     expect(out.nonce).toBe('***REDACTED***');
   });
 
+  it('masks URL- and link-valued keys, which can carry an access token', () => {
+    const out = redactSecrets({
+      release_link: 'https://preview.example.test/r/1?access=abc123',
+      upload_url: 'https://storage.example.test/obj?X-Signature=s',
+      config: { pre_order_links: ['https://store.example.test/p?ref=t'] },
+      label_id: 3,
+    }) as Record<string, unknown>;
+    expect(out.release_link).toBe('***REDACTED***');
+    expect(out.upload_url).toBe('***REDACTED***');
+    expect((out.config as Record<string, unknown>).pre_order_links).toBe('***REDACTED***');
+    expect(out.label_id).toBe(3);
+  });
+
+  it('replaces a URL inside any logged string, and keeps a boolean under a link key', () => {
+    const out = redactSecrets({
+      release_schedule: 'monthly, preview at https://preview.example.test/r/1?access=abc123 first',
+      config: { links_page_enabled: true, custom_description: 'see http://x.example.test/a?t=1' },
+      message: 'request to https://api.example.test/v1?sig=zz failed',
+    }) as Record<string, unknown>;
+    expect(out.release_schedule).toBe('monthly, preview at [url redacted] first');
+    expect(JSON.stringify(out)).not.toContain('abc123');
+    expect(JSON.stringify(out)).not.toContain('sig=zz');
+    const config = out.config as Record<string, unknown>;
+    expect(config.links_page_enabled).toBe(true);
+    expect(config.custom_description).toBe('see [url redacted]');
+  });
+
+  it('replaces any scheme:// URL, and letters glued in front of it go with it', () => {
+    expect(redactSecrets('seehttps://a.test/p?token=t1')).toBe('[url redacted]');
+    expect(redactSecrets('see https://a.test/p?token=t1')).toBe('see [url redacted]');
+    expect(redactSecrets('copy s3://bucket/key?sig=1 now')).toBe('copy [url redacted] now');
+    expect(redactSecrets('ftp://h.test/f?x=1')).toBe('[url redacted]');
+    expect(redactSecrets('a plain sentence: no link')).toBe('a plain sentence: no link');
+    expect(redactSecrets('bare ://x stays')).toBe('bare ://x stays');
+    // A URL glued after a bare `://` is still found.
+    expect(redactSecrets('x ://https://h.test/p?token=abc')).toBe('x ://[url redacted]');
+    expect(redactSecrets('(://s3://b/k?sig=1')).toBe('(://[url redacted]');
+    expect(redactSecrets('two: a://x and b://y')).toBe('two: [url redacted] and [url redacted]');
+  });
+
+  it('stays linear on long inputs with no URL (no polynomial backtracking)', () => {
+    const long = 'a'.repeat(200_000);
+    const started = Date.now();
+    expect(redactSecrets(long)).toBe(long);
+    expect(redactSecrets(`${long}://x`)).toBe('[url redacted]');
+    const bare = '://'.repeat(100_000);
+    expect(redactSecrets(bare)).toBe(bare);
+    const many = 'ab://x '.repeat(50_000);
+    expect(redactSecrets(many)).toBe('[url redacted] '.repeat(50_000));
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
   it('returns primitives unchanged', () => {
     expect(redactSecrets('hello')).toBe('hello');
     expect(redactSecrets(42)).toBe(42);
@@ -52,6 +104,14 @@ describe('log', () => {
     expect(err).toHaveBeenCalledTimes(1);
     expect(out).not.toHaveBeenCalled();
     expect(String(err.mock.calls[0][0])).toContain('hello world');
+  });
+
+  it('replaces a URL in the message text too', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    log('error', 'config load failed for https://h.test/c?token=abc');
+    const written = String(err.mock.calls[0][0]);
+    expect(written).not.toContain('token=abc');
+    expect(written).toContain('[url redacted]');
   });
 
   it('redacts secret values in the meta before writing', () => {

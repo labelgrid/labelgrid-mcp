@@ -5,6 +5,32 @@ All notable changes to `@labelgrid/cli` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.0] - 2026-11-23
+
+### Changed
+
+- `labelgrid analytics get` help states the API's current limits: a window of
+  up to 730 days and any number of section keys per request.
+- Error codes follow the API more closely, which can change what a script
+  matches on. When the API sends its own code (`code` or `error_code`), a 403,
+  404, 409, 422 or 5xx error now reports that code instead of `FORBIDDEN`,
+  `NOT_FOUND`, `CONFLICT`, `VALIDATION_FAILED` or `SERVER_ERROR`; without one,
+  the generic code is kept. A field-validation 422 still reports
+  `VALIDATION_FAILED`. Errors printed with `--json` may also carry `details`
+  and `blocking_issues`.
+- Depends on `@labelgrid/core` 0.3.0 (was 0.2.1).
+
+### Fixed
+
+- `labelgrid upload --type stereo` accepts only `.wav` and `.flac`, matching
+  what the API accepts.
+- `labelgrid beatport enable` takes the onboarding details the API requires:
+  `--listed <yes|no>` and `--genres <list>` (required), `--label-name` (when
+  listed), and the optional `--release-link`, `--artists` and `--schedule`.
+  The command sent no request body before, so the API refused every request.
+
 ## [0.3.3] - 2026-09-30
 
 ### Changed

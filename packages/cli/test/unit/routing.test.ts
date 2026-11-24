@@ -338,15 +338,77 @@ describe('review', () => {
 });
 
 describe('beatport enable', () => {
-  it('is confirm-gated and routes to the label endpoint', async () => {
-    const blocked = await run(['beatport', 'enable', '--label', '3']);
+  const base = [
+    'beatport',
+    'enable',
+    '--label',
+    '3',
+    '--listed',
+    'yes',
+    '--genres',
+    'House, Techno',
+    '--label-name',
+    'Night Shift',
+  ];
+
+  it('is confirm-gated and sends the onboarding body to the label endpoint', async () => {
+    // A valid request without --yes: only the confirmation gate stops it.
+    const blocked = await run(base);
     expect(blocked.code).toBe(1);
     expect(blocked.calls).toHaveLength(0);
 
-    const r = await run(['beatport', 'enable', '--label', '3', '--yes']);
+    const r = await run([...base, '--yes']);
     expect(r.code).toBe(0);
     expect(r.calls).toEqual([
-      { method: 'post', args: ['/labels/3/enable-beatport', undefined, undefined] },
+      {
+        method: 'post',
+        args: [
+          '/labels/3/enable-beatport',
+          {
+            is_label_listed_on_beatport: true,
+            record_label_name: 'Night Shift',
+            beatport_genres: ['House', 'Techno'],
+          },
+          undefined,
+        ],
+      },
     ]);
+  });
+
+  it('refuses each malformed request before any call, for its own reason', async () => {
+    const cmd = ['beatport', 'enable', '--label', '3'];
+    const cases: Array<[string[], string]> = [
+      [[...cmd, '--genres', 'House', '--yes'], '--listed'],
+      [[...cmd, '--listed', 'maybe', '--genres', 'House', '--yes'], '--listed yes or --listed no'],
+      [[...cmd, '--listed', 'no', '--genres', ' , ', '--yes'], 'at least one genre name'],
+      [[...cmd, '--listed', 'no', '--genres', 'House, ,Techno', '--yes'], 'empty entry'],
+      [[...cmd, '--listed', 'yes', '--genres', 'House', '--yes'], '--label-name'],
+      [
+        [...cmd, '--listed', 'yes', '--genres', 'House', '--label-name', '  ', '--yes'],
+        '--label-name',
+      ],
+    ];
+    for (const [argv, reason] of cases) {
+      const r = await run(argv);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain(reason);
+      expect(r.calls).toHaveLength(0);
+    }
+  });
+
+  it('sends the optional onboarding details when given', async () => {
+    const r = await run([
+      ...['beatport', 'enable', '--label', '3', '--listed', 'no', '--genres', 'House'],
+      ...['--release-link', 'https://example.test/r', '--artists', 'A, B', '--schedule', 'monthly'],
+      '--yes',
+    ]);
+    expect(r.code).toBe(0);
+    expect(r.calls[0].args[1]).toEqual({
+      is_label_listed_on_beatport: false,
+      beatport_genres: ['House'],
+      release_link: 'https://example.test/r',
+      associated_artists: 'A, B',
+      release_schedule: 'monthly',
+    });
   });
 });

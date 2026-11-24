@@ -10,6 +10,21 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-23
+
+### Changed
+
+- A 422 response that carries its own `error_code` or `code` keeps that code on
+  the normalized error instead of `VALIDATION_FAILED`, as 403, 404, 409 and 5xx
+  responses already did. A 422 without one, or with the generic
+  `validation_failed`, still maps to `VALIDATION_FAILED`.
+
+### Security
+
+- Log redaction also masks string values under keys containing `url` or
+  `link`, and replaces any URL inside other logged strings, since a URL can
+  carry an access token in its query string.
+
 ## [0.2.4] - 2026-11-09
 
 ### Changed

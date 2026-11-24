@@ -187,9 +187,13 @@ describe('upload_asset', () => {
     writeFileSync(flac, Buffer.from([0x66, 0x4c, 0x61, 0x43]));
     const pdf = join(dir, 'x.pdf');
     writeFileSync(pdf, Buffer.from([0x25, 0x50, 0x44, 0x46]));
+    const aiff = join(dir, 'x.aiff');
+    writeFileSync(aiff, Buffer.from([0x46, 0x4f, 0x52, 0x4d]));
     const cases: Array<[string, string]> = [
       // audio: a .mp3 is not an accepted stereo master.
       ['track_stereo', mp3],
+      // the API accepts WAV and FLAC stereo masters only — an AIFF is refused.
+      ['track_stereo', aiff],
       // dolby accepts WAV only — a .flac must be rejected.
       ['track_dolby', flac],
       // lyrics: a .wav is not a lyrics file.
@@ -421,10 +425,61 @@ describe('standalone distribution actions', () => {
     });
   });
 
-  it('enable_beatport → POST /labels/{id}/enable-beatport', async () => {
+  it('enable_beatport → POST /labels/{id}/enable-beatport with the onboarding body', async () => {
     const { fetchFn, ctx } = harness();
-    await byName('enable_beatport').handler({ label_id: 3 }, ctx);
+    await byName('enable_beatport').handler(
+      {
+        label_id: 3,
+        is_label_listed_on_beatport: true,
+        record_label_name: 'Night Shift',
+        beatport_genres: ['House', 'Techno'],
+      },
+      ctx,
+    );
     expect(last(fetchFn).init.method).toBe('POST');
     expect(last(fetchFn).url).toContain('/labels/3/enable-beatport');
+    expect(JSON.parse(String(last(fetchFn).init.body))).toEqual({
+      is_label_listed_on_beatport: true,
+      record_label_name: 'Night Shift',
+      beatport_genres: ['House', 'Techno'],
+    });
+  });
+
+  it('enable_beatport requires the listing flag and at least one genre via zod', () => {
+    const schema = z.object(byName('enable_beatport').inputShape);
+    // Only the flag is missing, so its requiredness alone decides the result.
+    expect(schema.safeParse({ label_id: 3, beatport_genres: ['House'] }).success).toBe(false);
+    expect(
+      schema.safeParse({ label_id: 3, is_label_listed_on_beatport: false, beatport_genres: [] })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ label_id: 3, is_label_listed_on_beatport: false, beatport_genres: ['  '] })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({
+        label_id: 3,
+        is_label_listed_on_beatport: false,
+        beatport_genres: ['House'],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('enable_beatport refuses a listed label with no name before any request', async () => {
+    for (const record_label_name of [undefined, '   ']) {
+      const { fetchFn, ctx } = harness();
+      const r = await byName('enable_beatport').handler(
+        {
+          label_id: 3,
+          is_label_listed_on_beatport: true,
+          record_label_name,
+          beatport_genres: ['House'],
+        },
+        ctx,
+      );
+      expect('error' in r && r.error.message).toContain('record_label_name');
+      expect(fetchFn).not.toHaveBeenCalled();
+    }
   });
 });
