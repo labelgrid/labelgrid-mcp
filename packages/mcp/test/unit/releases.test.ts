@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LabelGridClient } from '@labelgrid/core';
@@ -340,6 +348,41 @@ describe('upload_review_document', () => {
     expect((lastInit(fetchFn).body as FormData).get('review_issue_id')).toBe('901');
   });
 
+  it('accepts only safe integers as a numeric review_issue_id; a larger id goes as a string', async () => {
+    const ok = { release_id: 55, file_path: pdf, type: 'rights_proof', idempotency_key: KEY };
+    // JSON 9007199254740993 cannot be held exactly as a number: it is refused.
+    const unsafe = JSON.parse('9007199254740993') as number;
+    expect(schema().safeParse({ ...ok, review_issue_id: unsafe }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, review_issue_id: Number.MAX_SAFE_INTEGER }).success).toBe(
+      true,
+    );
+    const args = { ...ok, review_issue_id: '9007199254740993' };
+    expect(schema().safeParse(args).success).toBe(true);
+    const { fetchFn, ctx } = harness({ data: { id: 7 } }, 201);
+    await tool().handler(args, ctx);
+    expect((lastInit(fetchFn).body as FormData).get('review_issue_id')).toBe('9007199254740993');
+  });
+
+  it('binds the upload to the identity of the file it checked', async () => {
+    const { ctx } = harness({ data: { id: 8 } }, 201);
+    const spy = vi.spyOn(ctx.client, 'postMultipart');
+    await tool().handler(
+      { release_id: 55, file_path: pdf, type: 'rights_proof', idempotency_key: KEY },
+      ctx,
+    );
+    const real = realpathSync(pdf);
+    const { dev, ino } = statSync(real, { bigint: true });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const call = spy.mock.calls[0];
+    expect(call[1]).toBe(real);
+    expect(call[4]).toEqual({
+      idempotency: true,
+      idempotencyKey: KEY,
+      maxBytes: 20 * 1024 * 1024,
+      expectIdentity: { dev, ino },
+    });
+  });
+
   it('validates its inputs via zod', () => {
     const ok = { release_id: 55, file_path: pdf, type: 'rights_proof', idempotency_key: KEY };
     expect(schema().safeParse(ok).success).toBe(true);
@@ -423,6 +466,8 @@ describe('upload_review_document', () => {
       'invalid_idempotency_key',
     ],
     [423, { message: 'Locked.', error_code: 'ENTITY_LOCKED' }, 'ENTITY_LOCKED'],
+    [403, { message: 'This release cannot take documents.' }, 'FORBIDDEN'],
+    [403, { message: 'Forbidden.', error_code: 'RELEASE_NOT_EDITABLE' }, 'RELEASE_NOT_EDITABLE'],
     [429, { message: 'Too many attempts.' }, 'RATE_LIMITED'],
   ])('passes a %i refusal through with its code', async (status, body, code) => {
     const { ctx } = harness(body, status);

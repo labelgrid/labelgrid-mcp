@@ -32,7 +32,7 @@
         },
         {
           "name": "LABELGRID_ENABLE_WRITES",
-          "description": "Enable safe writes (create/update drafts, labels, artists, and similar). Enabled by default; set to false for read-only.",
+          "description": "Enable safe writes (create/update drafts, labels, artists, and similar). Enabled by default; set to false to turn them off. For reads only, use LABELGRID_READ_ONLY=true.",
           "isRequired": false,
           "format": "string"
         },

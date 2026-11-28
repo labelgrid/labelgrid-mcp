@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   20 MB as a release review document. Pass `review_issue_id` to answer a review
   request, and `track_ids` when the request is about specific tracks; without
   `review_issue_id` it is a general upload. `idempotency_key` is required:
-  retrying with the same key and the same file never stores a second copy.
+  retrying with the same key and the same file stores no second copy within
+  the server's 24-hour idempotency window.
 - `get_release_review` has two new views: `documents` lists a release's review
   documents (each with `track_ids`) and the `upload` block that says which
   requests an upload can answer; `document_download` returns a temporary

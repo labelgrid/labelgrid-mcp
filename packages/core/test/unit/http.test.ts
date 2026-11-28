@@ -467,6 +467,20 @@ describe('LabelGridClient.postMultipart', () => {
     expect(headerOf(lastInit(fetchFn), 'Idempotency-Key')).toBe('retry-key-0001');
   });
 
+  it('sends an explicit idempotencyKey even without idempotency: true', async () => {
+    const pdf = join(dir, 'proof-key-only.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(201, { data: {} }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart(
+      '/x',
+      pdf,
+      'file',
+      undefined,
+      { idempotencyKey: 'key-only-0001' },
+    );
+    expect(headerOf(lastInit(fetchFn), 'Idempotency-Key')).toBe('key-only-0001');
+  });
+
   it('generates an Idempotency-Key when idempotency is on and no key is given', async () => {
     const pdf = join(dir, 'proof-gen.pdf');
     writeFileSync(pdf, Buffer.from('%PDF-1.4'));

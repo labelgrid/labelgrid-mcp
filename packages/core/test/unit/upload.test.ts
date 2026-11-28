@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -467,6 +467,75 @@ describe('postMultipart maxBytes', () => {
       'file',
       undefined,
       { maxBytes: 10 },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it.each([Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY])(
+    'returns INVALID_LIMIT with no request for maxBytes %s',
+    async (maxBytes) => {
+      const pdf = join(dir, 'limit.pdf');
+      writeFileSync(pdf, Buffer.from('%PDF'));
+      const fetchFn = noCallFetch();
+      const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+        '/releases/1/review-documents',
+        pdf,
+        'file',
+        undefined,
+        { maxBytes },
+      );
+      expect('error' in r && r.error.code).toBe('INVALID_LIMIT');
+      expect(fetchFn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns FILE_CHANGED with no request when the opened file is not the expected one', async () => {
+    const pdf = join(dir, 'opened.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF opened'));
+    const other = join(dir, 'other.pdf');
+    writeFileSync(other, Buffer.from('%PDF other'));
+    const { dev, ino } = statSync(other, { bigint: true });
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 100, expectIdentity: { dev, ino } },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_CHANGED');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('sends the file when the opened file is the expected one', async () => {
+    const pdf = join(dir, 'same.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF same'));
+    const { dev, ino } = statSync(pdf, { bigint: true });
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 100, expectIdentity: { dev, ino } },
+    );
+    expect('data' in r).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a symlink as the opened path with no request', async () => {
+    const target = join(dir, 'target.pdf');
+    writeFileSync(target, Buffer.from('%PDF target'));
+    const link = join(dir, 'link.pdf');
+    symlinkSync(target, link);
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      link,
+      'file',
+      undefined,
+      { maxBytes: 100 },
     );
     expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
     expect(fetchFn).not.toHaveBeenCalled();

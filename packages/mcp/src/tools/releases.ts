@@ -9,6 +9,7 @@
  * API response.
  */
 
+import { statSync } from 'node:fs';
 import { type ApiResult, assertAllowedExtension } from '@labelgrid/core';
 import { z } from 'zod';
 import { applyProjection } from '../projection.js';
@@ -24,7 +25,15 @@ const responseFormat = z
   );
 
 /** A positive decimal id, as a number or as the string a list response returns. */
-const decimalId = z.union([z.string().regex(/^[1-9][0-9]*$/), z.number().int().positive()]);
+const decimalId = z.union([
+  z.string().regex(/^[1-9][0-9]*$/),
+  // Only ids a number holds exactly; a larger id goes as a decimal string.
+  z
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER),
+]);
 
 /** Reduces each listed review document's `tracks` to `track_ids`; `upload` is kept whole. */
 function slimReviewDocuments(result: ApiResult<unknown>): ApiResult<unknown> {
@@ -269,6 +278,21 @@ const uploadReviewDocument: ToolDef = {
   handler: async (args, { client }): Promise<ApiResult<unknown>> => {
     const ext = assertAllowedExtension(args.file_path as string, REVIEW_DOCUMENT_EXTS);
     if ('error' in ext) return { error: ext.error };
+    // The identity of the file whose extension was checked: core refuses to send
+    // a different file found at that path when it opens it.
+    let identity: { dev: bigint; ino: bigint };
+    try {
+      const { dev, ino } = statSync(ext.realPath, { bigint: true });
+      identity = { dev, ino };
+    } catch (err) {
+      return {
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: `Could not read file at ${ext.realPath}: ${err instanceof Error ? err.message : 'unknown error'}`,
+          status: 0,
+        },
+      };
+    }
     const extra: Record<string, string | string[]> = { type: String(args.type) };
     if (args.review_issue_id !== undefined) extra.review_issue_id = String(args.review_issue_id);
     if (Array.isArray(args.track_ids)) {
@@ -284,6 +308,7 @@ const uploadReviewDocument: ToolDef = {
         idempotency: true,
         idempotencyKey: args.idempotency_key as string,
         maxBytes: REVIEW_DOCUMENT_MAX_BYTES,
+        expectIdentity: identity,
       },
     );
   },

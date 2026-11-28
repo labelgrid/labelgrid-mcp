@@ -106,6 +106,12 @@ describe('distribution toolset shape', () => {
     expect(desc).toContain('review_issue_id');
     expect(desc).toContain('track_license');
     expect(desc).toContain('manage_track_license');
+    // Each proof is paired with its own tool, in this order: a swap fails.
+    expect(desc).toMatch(
+      /review_document → upload_review_document \(with review_issue_id\); track_license → manage_track_license/,
+    );
+    // Any one listed proof is enough.
+    expect(desc).toContain('any one listed proof');
   });
 
   it('carries the immutability caveats in the upload/delete descriptions', () => {

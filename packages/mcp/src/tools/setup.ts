@@ -44,7 +44,7 @@ const SETUP_GUIDE = {
   security_note:
     'Never paste your API token into the chat — it belongs only in your client configuration file. Anyone with the token can access your account until you revoke it in the dashboard.',
   optional_settings: [
-    'LABELGRID_ENABLE_WRITES — safe draft-stage writes; on by default, set false for read-only (see the README Safety section).',
+    'LABELGRID_ENABLE_WRITES — safe draft-stage writes; on by default, set false to turn them off. For reads only, use LABELGRID_READ_ONLY=true (see the README Safety section).',
     'LABELGRID_ENABLE_FULL_WRITES (plus LABELGRID_FULL_WRITES_ACK) — arm consequential distribution actions; off by default (see the README Safety section).',
     'LABELGRID_TOOLSETS — expose only a comma-separated subset of toolsets: account, reference, catalog, releases, insights, finance, webhooks, distribution (pre-0.3.0 names are still accepted as aliases). The webhooks toolset is off by default — name it explicitly here to enable it (see the README Configuration section).',
     'LABELGRID_READ_ONLY — force reads only, overriding the write flags (see the README Safety section).',

@@ -84,7 +84,7 @@ All configuration is via environment variables in your client config.
 | --- | --- | --- |
 | `LABELGRID_API_TOKEN` | — | **Required.** Your API token. |
 | `LABELGRID_API_URL` | production API | Override the API base URL. |
-| `LABELGRID_ENABLE_WRITES` | `true` | Safe writes (create/update drafts, labels, artists, …). Set `false` for reads only. |
+| `LABELGRID_ENABLE_WRITES` | `true` | Safe writes (create/update drafts, labels, artists, …). Set `false` to turn off safe writes; for reads only, use `LABELGRID_READ_ONLY`. |
 | `LABELGRID_ENABLE_FULL_WRITES` | `false` | Arm full writes — see [Safety model](#safety-model). Also requires the acknowledgment below. |
 | `LABELGRID_FULL_WRITES_ACK` | — | Must equal the exact acknowledgment sentence to arm full writes. |
 | `LABELGRID_READ_ONLY` | `false` | Force reads only; overrides both write flags. |
@@ -177,7 +177,7 @@ tool definitions by `npm run gen-docs` — do not edit it by hand._
 | `upload_asset` | full-write | Upload a finalized track or release asset from a local file. `track_stereo` (WAV/FLAC), `track_dolby` (Dolby Atmos WAV) and `track_lyrics` (LRC) process asynchronously — check state with get_asset (mode info). `release_cover_art` uploads or replaces the static cover art image. `release_motion_square`/`release_motion_tall` upload the animated cover (motion artwork) video, also asynchronous. All assets become immutable once the release is distributed — upload final files first. |
 | `delete_asset` | full-write | Delete a track asset (track_*) or an animated cover / motion artwork video (release_motion_*). Allowed only while the parent release is an editable draft; refused once locked or distributed. Cover art cannot be deleted. |
 | `manage_track_license` | full-write | Manage license documents on a track (cover or cleared sample). `upload` attaches a new license — `file_path` required, `type` selects cover/sample; optional metadata fields. `update` replaces the file and/or metadata — `track_license_id` (from list_track_licenses) and `file_path` required. `delete` permanently removes a license and its file — `track_license_id` required; cannot be undone. Immutability-governed once the release is live. |
-| `distribute_release` | full-write | Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission. On proof_documents_required, per details proof: review_document → upload_review_document (with review_issue_id); track_license → manage_track_license. |
+| `distribute_release` | full-write | Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission. On proof_documents_required, any one listed proof answers each details entry: review_document → upload_review_document (with review_issue_id); track_license → manage_track_license. |
 | `takedown_release` | full-write | Take a release down from ALL outlets/stores — a final action that removes it everywhere it was delivered. Re-distribution is a fresh submission. |
 | `confirm_review` | full-write | Confirm a release Preflight QC placed on hold, moving it into distribution review, after reviewing the quality report and accepting the release as-is. If blocking issues remain, the blocking_issues_open error includes blocking_issues to resolve or answer with a review-issue note before retrying. Safe to repeat. |
 | `enable_beatport` | full-write | Request Beatport onboarding for a label. Declined or canceled requests can be submitted again; pending requests and verified labels do not start another request. Confirm the label is correct first. |
@@ -279,7 +279,7 @@ Version 0.3.0 is a **breaking release**: the 83 per-endpoint tools were consolid
 The server has three gates. Each is fail-closed: a tool is only registered — and only callable — when its gate is armed.
 
 1. **Reads** — always on. Listing and fetching your catalog, analytics, statements, and so on.
-2. **Safe writes** (`LABELGRID_ENABLE_WRITES`, on by default) — reversible, draft-stage changes: creating and editing draft releases and tracks, labels, artists, writers, publishers, webhooks, landing pages, and notes. Set `LABELGRID_ENABLE_WRITES=false` (or `LABELGRID_READ_ONLY=true`) to turn these off.
+2. **Safe writes** (`LABELGRID_ENABLE_WRITES`, on by default) — reversible, draft-stage changes: creating and editing draft releases and tracks, labels, artists, writers, publishers, webhooks, landing pages, and notes. Set `LABELGRID_ENABLE_WRITES=false` to turn these off; for reads only, set `LABELGRID_READ_ONLY=true`, which also turns off full writes.
 3. **Full writes** (`LABELGRID_ENABLE_FULL_WRITES`, off by default) — consequential, hard-to-reverse actions. To arm them you must set **both**:
 
    ```bash
