@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { LabelGridClient } from '@labelgrid/core';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import type { Config } from '../../src/config.js';
+import { COVERAGE, PENDING_DOCS } from '../../src/coverage.js';
 import { releaseTools } from '../../src/tools/releases.js';
+import { toToolResult } from '../../src/tools/types.js';
 import type { ToolContext, ToolDef } from '../../src/tools/types.js';
 
 function harness(payload: unknown = { ok: true }, status = 200) {
@@ -54,8 +58,11 @@ describe('releases toolset shape', () => {
       'run_release_checks',
       'manage_release_links',
       'add_review_issue_note',
+      'upload_review_document',
     ]);
     for (const t of releaseTools) expect(t.toolset).toBe('releases');
+    expect(byName('upload_review_document').gate).toBe('full_write');
+    expect(byName('upload_review_document').annotations).toEqual({ destructiveHint: false });
     for (const name of [
       'get_release_review',
       'get_delivery_queue',
@@ -123,6 +130,333 @@ describe('get_release_review', () => {
       ctx,
     );
     expect('data' in r && r.data).toEqual(payload);
+  });
+});
+
+describe('get_release_review view documents', () => {
+  const upload = {
+    can_upload: false,
+    blocked_reason: 'locked',
+    max_documents: 50,
+    max_file_bytes: 20971520,
+    documents_this_round: 1,
+    answerable_issue_ids: ['901'],
+    answerable_issues: [{ id: '901', accepted_types: ['rights_proof'], scope: 'track' }],
+  };
+  function doc(id: number, trackCount: number) {
+    return {
+      id,
+      type: 'rights_proof',
+      review_issue_id: '901',
+      original_filename: `proof-${id}.pdf`,
+      mime_type: 'application/pdf',
+      size_bytes: 1234,
+      whole_release: false,
+      tracks: Array.from({ length: trackCount }, (_, i) => ({
+        id: 1000 + i,
+        title: `A fairly long track title number ${i} for size`,
+        mix_version: 'Original Mix',
+      })),
+      uploaded_at: '2026-11-27T10:00:00+00:00',
+    };
+  }
+
+  it('→ GET /releases/{id}/review-documents', async () => {
+    const { fetchFn, ctx } = harness({ data: [], upload });
+    await byName('get_release_review').handler({ release_id: 55, view: 'documents' }, ctx);
+    expect(lastInit(fetchFn).method).toBe('GET');
+    expect(lastUrl(fetchFn)).toBe(
+      'https://api.example.test/api/public/releases/55/review-documents',
+    );
+  });
+
+  it('by default keeps upload whole and reduces each document tracks to track_ids', async () => {
+    const { ctx } = harness({ data: [doc(7, 2)], upload });
+    const r = await byName('get_release_review').handler(
+      { release_id: 55, view: 'documents' },
+      ctx,
+    );
+    expect('data' in r).toBe(true);
+    const data = ('data' in r ? r.data : null) as Record<string, unknown>;
+    expect(data.upload).toEqual(upload);
+    expect(data._projection).toBeUndefined();
+    const docs = data.data as Array<Record<string, unknown>>;
+    expect(docs[0].track_ids).toEqual([1000, 1001]);
+    expect(docs[0].tracks).toBeUndefined();
+    expect(docs[0].id).toBe(7);
+    expect(docs[0].review_issue_id).toBe('901');
+    expect(docs[0].original_filename).toBe('proof-7.pdf');
+  });
+
+  it('keeps 50 documents of 200 tracks each a normal result with upload present', async () => {
+    const payload = { data: Array.from({ length: 50 }, (_, i) => doc(i + 1, 200)), upload };
+    const { ctx } = harness(payload);
+    const r = await byName('get_release_review').handler(
+      { release_id: 55, view: 'documents' },
+      ctx,
+    );
+    const result = toToolResult(r);
+    expect(result.isError).toBeUndefined();
+    const parsed = JSON.parse(result.content[0].text) as Record<string, unknown>;
+    expect(parsed.upload).toEqual(upload);
+    expect((parsed.data as unknown[]).length).toBe(50);
+  });
+});
+
+describe('get_release_review view document_download', () => {
+  it('without review_document_id → INVALID_SELECTOR and no HTTP call', async () => {
+    const { fetchFn, ctx } = harness();
+    const r = await byName('get_release_review').handler(
+      { release_id: 55, view: 'document_download' },
+      ctx,
+    );
+    expect('error' in r && r.error.code).toBe('INVALID_SELECTOR');
+    expect('error' in r && r.error.message).toContain('review_document_id');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('with an id → GET …/review-documents/{id}/download, the link returned as sent', async () => {
+    const link = {
+      download_url: 'https://files.example.test/doc.pdf?sig=abc',
+      filename: 'proof.pdf',
+      expires_at: '2026-11-28T10:20:00+00:00',
+    };
+    const { fetchFn, ctx } = harness(link);
+    const r = await byName('get_release_review').handler(
+      { release_id: 55, view: 'document_download', review_document_id: 7 },
+      ctx,
+    );
+    expect(lastUrl(fetchFn)).toBe(
+      'https://api.example.test/api/public/releases/55/review-documents/7/download',
+    );
+    expect('data' in r && r.data).toEqual(link);
+  });
+
+  it('accepts review_document_id only as a positive integer (documents list ids as numbers)', () => {
+    const schema = z.object(byName('get_release_review').inputShape);
+    const base = { release_id: 1, view: 'document_download' };
+    expect(schema.safeParse({ ...base, review_document_id: 7 }).success).toBe(true);
+    expect(schema.safeParse({ ...base, review_document_id: '7/../x' }).success).toBe(false);
+    expect(schema.safeParse({ ...base, review_document_id: 0 }).success).toBe(false);
+    expect(schema.safeParse({ ...base, review_document_id: 1.5 }).success).toBe(false);
+  });
+
+  it('describes the documents views and the scope of response_format', () => {
+    const desc = byName('get_release_review').description;
+    expect(desc).toContain('documents');
+    expect(desc).toContain('document_download');
+    expect(desc.toLowerCase()).toContain('without');
+    expect(desc).toMatch(/response_format/);
+  });
+});
+
+describe('upload_review_document', () => {
+  let dir: string;
+  let pdf: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lgmcp-review-doc-'));
+    pdf = join(dir, 'rights.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4 proof'));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const KEY = 'retry-key-0001';
+  const tool = () => byName('upload_review_document');
+  const schema = () => z.object(tool().inputShape);
+
+  it('POSTs the exact multipart parts and the Idempotency-Key', async () => {
+    const { fetchFn, ctx } = harness({ data: { id: 3 } }, 201);
+    const r = await tool().handler(
+      {
+        release_id: 55,
+        file_path: pdf,
+        type: 'rights_proof',
+        review_issue_id: '901',
+        track_ids: [30, 4, 30, 12],
+        idempotency_key: KEY,
+      },
+      ctx,
+    );
+    expect('data' in r).toBe(true);
+    const init = lastInit(fetchFn);
+    expect(init.method).toBe('POST');
+    expect(lastUrl(fetchFn)).toBe(
+      'https://api.example.test/api/public/releases/55/review-documents',
+    );
+    expect(header(fetchFn, 'Idempotency-Key')).toBe(KEY);
+    const form = init.body as FormData;
+    expect([...form.keys()]).toEqual([
+      'file',
+      'type',
+      'review_issue_id',
+      'track_ids[]',
+      'track_ids[]',
+      'track_ids[]',
+    ]);
+    expect((form.get('file') as File).name).toBe('rights.pdf');
+    expect((form.get('file') as File).type).toBe('application/pdf');
+    expect(form.get('type')).toBe('rights_proof');
+    expect(form.get('review_issue_id')).toBe('901');
+    expect(form.getAll('track_ids[]')).toEqual(['4', '12', '30']);
+  });
+
+  it('sends a general upload (no review_issue_id, no track_ids) as file and type only', async () => {
+    const { fetchFn, ctx } = harness({ data: { id: 4 } }, 201);
+    await tool().handler(
+      { release_id: 55, file_path: pdf, type: 'split_sheet', idempotency_key: KEY },
+      ctx,
+    );
+    const form = lastInit(fetchFn).body as FormData;
+    expect([...form.keys()]).toEqual(['file', 'type']);
+  });
+
+  it('accepts a string review_issue_id taken from a list response and sends it unchanged', async () => {
+    const listed = { answerable_issue_ids: ['123456789012'] };
+    const args = {
+      release_id: 55,
+      file_path: pdf,
+      type: 'artist_authorization',
+      review_issue_id: listed.answerable_issue_ids[0],
+      idempotency_key: KEY,
+    };
+    expect(schema().safeParse(args).success).toBe(true);
+    const { fetchFn, ctx } = harness({ data: { id: 5 } }, 201);
+    await tool().handler(args, ctx);
+    expect((lastInit(fetchFn).body as FormData).get('review_issue_id')).toBe('123456789012');
+  });
+
+  it('sends a numeric review_issue_id as its decimal string', async () => {
+    const { fetchFn, ctx } = harness({ data: { id: 6 } }, 201);
+    await tool().handler(
+      {
+        release_id: 55,
+        file_path: pdf,
+        type: 'rights_proof',
+        review_issue_id: 901,
+        idempotency_key: KEY,
+      },
+      ctx,
+    );
+    expect((lastInit(fetchFn).body as FormData).get('review_issue_id')).toBe('901');
+  });
+
+  it('validates its inputs via zod', () => {
+    const ok = { release_id: 55, file_path: pdf, type: 'rights_proof', idempotency_key: KEY };
+    expect(schema().safeParse(ok).success).toBe(true);
+    // idempotency_key is required and well-formed.
+    expect(schema().safeParse({ ...ok, idempotency_key: undefined }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, idempotency_key: 'short' }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, idempotency_key: 'has space in it' }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, idempotency_key: 'k'.repeat(129) }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, idempotency_key: 'k'.repeat(128) }).success).toBe(true);
+    // type is the five-value enum.
+    for (const type of [
+      'ai_statement',
+      'rights_proof',
+      'artist_authorization',
+      'split_sheet',
+      'remix_authorization',
+    ]) {
+      expect(schema().safeParse({ ...ok, type }).success).toBe(true);
+    }
+    expect(schema().safeParse({ ...ok, type: 'invoice' }).success).toBe(false);
+    // track_ids: 1–200 positive ids.
+    expect(schema().safeParse({ ...ok, track_ids: [] }).success).toBe(false);
+    expect(schema().safeParse({ ...ok, track_ids: [1] }).success).toBe(true);
+    const many = Array.from({ length: 201 }, (_, i) => i + 1);
+    expect(schema().safeParse({ ...ok, track_ids: many.slice(0, 200) }).success).toBe(true);
+    expect(schema().safeParse({ ...ok, track_ids: many }).success).toBe(false);
+    // review_issue_id: a positive decimal, as a string or a number.
+    expect(schema().safeParse({ ...ok, review_issue_id: '901' }).success).toBe(true);
+    expect(schema().safeParse({ ...ok, review_issue_id: 901 }).success).toBe(true);
+    for (const bad of ['0', '012', '9x', '1e3', ' 9', '-1', '', 0, -3, 1.5]) {
+      expect(schema().safeParse({ ...ok, review_issue_id: bad }).success).toBe(false);
+    }
+  });
+
+  it('refuses a disallowed extension with no HTTP call', async () => {
+    const exe = join(dir, 'proof.exe');
+    writeFileSync(exe, Buffer.from([0x4d, 0x5a]));
+    const { fetchFn, ctx } = harness();
+    const r = await tool().handler(
+      { release_id: 55, file_path: exe, type: 'rights_proof', idempotency_key: KEY },
+      ctx,
+    );
+    expect('error' in r && r.error.code).toBe('FILE_TYPE_NOT_ALLOWED');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('refuses a .pdf symlink to a disallowed file with no HTTP call', async () => {
+    const target = join(dir, 'payload.sh');
+    writeFileSync(target, 'echo hi');
+    const link = join(dir, 'alias.pdf');
+    symlinkSync(target, link);
+    const { fetchFn, ctx } = harness();
+    const r = await tool().handler(
+      { release_id: 55, file_path: link, type: 'rights_proof', idempotency_key: KEY },
+      ctx,
+    );
+    expect('error' in r && r.error.code).toBe('FILE_TYPE_NOT_ALLOWED');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      422,
+      { message: 'Not accepted.', error_code: 'DOCUMENT_TYPE_NOT_ACCEPTED' },
+      'DOCUMENT_TYPE_NOT_ACCEPTED',
+    ],
+    [
+      422,
+      { message: 'Too large.', error_code: 'DOCUMENT_FILE_TOO_LARGE' },
+      'DOCUMENT_FILE_TOO_LARGE',
+    ],
+    [422, { message: 'Reused.', error_code: 'idempotency_key_reused' }, 'idempotency_key_reused'],
+    [
+      409,
+      { message: 'Processing.', error_code: 'idempotency_key_processing' },
+      'idempotency_key_processing',
+    ],
+    [
+      400,
+      { message: 'Bad key.', error_code: 'invalid_idempotency_key' },
+      'invalid_idempotency_key',
+    ],
+    [423, { message: 'Locked.', error_code: 'ENTITY_LOCKED' }, 'ENTITY_LOCKED'],
+    [429, { message: 'Too many attempts.' }, 'RATE_LIMITED'],
+  ])('passes a %i refusal through with its code', async (status, body, code) => {
+    const { ctx } = harness(body, status);
+    const r = await tool().handler(
+      { release_id: 55, file_path: pdf, type: 'rights_proof', idempotency_key: KEY },
+      ctx,
+    );
+    expect('error' in r && r.error.code).toBe(code);
+    expect('error' in r && r.error.status).toBe(status);
+  });
+
+  it('describes answering a request, a general upload, the retry rule and the limits', () => {
+    const desc = tool().description;
+    expect(desc).toContain('review_issue_id');
+    expect(desc).toContain('answerable_issues');
+    expect(desc).toContain('track_ids');
+    expect(desc.toLowerCase()).toContain('general');
+    expect(desc.toLowerCase()).toContain('same key');
+    expect(desc).toMatch(/PDF/);
+    expect(desc).toContain('20 MB');
+  });
+});
+
+describe('review-document coverage', () => {
+  const ops = {
+    'GET /releases/{release}/review-documents': 'get_release_review',
+    'POST /releases/{release}/review-documents': 'upload_review_document',
+    'GET /releases/{release}/review-documents/{reviewDocument}/download': 'get_release_review',
+  };
+  it('maps the three operations in COVERAGE and lists them as pending docs', () => {
+    for (const [op, toolName] of Object.entries(ops)) {
+      expect(COVERAGE[op]).toBe(toolName);
+      expect(PENDING_DOCS[op]).toBe(toolName);
+    }
   });
 });
 

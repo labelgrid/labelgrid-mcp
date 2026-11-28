@@ -2,7 +2,7 @@ import { LabelGridClient } from '@labelgrid/core';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Config } from '../../src/config.js';
+import { type Config, FULL_WRITES_ACK, loadConfig } from '../../src/config.js';
 import { buildServer } from '../../src/server.js';
 import { accountTools } from '../../src/tools/account.js';
 import { allTools } from '../../src/tools/all.js';
@@ -111,7 +111,38 @@ describe('buildServer default connected surface', () => {
     expect(names).toEqual(['list_webhooks', 'manage_webhook']);
   });
 
-  it('exposes all 34 tools when every toolset is named and full writes are armed', async () => {
+  it('lists upload_review_document only when full writes are armed', async () => {
+    const fetchFn = vi.fn(async () => jsonResponse(200, {})) as unknown as typeof fetch;
+    const env = (extra: Record<string, string> = {}) =>
+      loadConfig({
+        LABELGRID_API_TOKEN: 'tok',
+        LABELGRID_API_URL: 'https://api.example.test/api/public',
+        ...extra,
+      });
+    const armed = {
+      LABELGRID_ENABLE_FULL_WRITES: 'true',
+      LABELGRID_FULL_WRITES_ACK: FULL_WRITES_ACK,
+    };
+    const surfaces: Array<[Config, boolean]> = [
+      // The default configuration.
+      [env(), false],
+      // Read-only wins even over armed full writes.
+      [env({ ...armed, LABELGRID_READ_ONLY: 'true' }), false],
+      [env({ LABELGRID_TOOLSETS: 'releases' }), false],
+      // The full-write configuration.
+      [env(armed), true],
+      [env({ ...armed, LABELGRID_TOOLSETS: 'releases' }), true],
+    ];
+    for (const [cfg, listed] of surfaces) {
+      const client = await connectWithTools(cfg, fetchFn, allTools());
+      const names = (await client.listTools()).tools.map((t) => t.name);
+      expect(names.includes('upload_review_document')).toBe(listed);
+      // The read views stay on every surface that has the releases toolset.
+      expect(names).toContain('get_release_review');
+    }
+  });
+
+  it('exposes all 35 tools when every toolset is named and full writes are armed', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
       config({
@@ -131,7 +162,7 @@ describe('buildServer default connected surface', () => {
       allTools(),
     );
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(34);
+    expect(tools).toHaveLength(35);
   });
 
   it('registers the nine reference resources', async () => {
@@ -285,7 +316,7 @@ describe('buildServer legal disclosure instructions', () => {
 describe('buildServer setup mode', () => {
   const setupCfg = () => config({ setupMode: true, token: null, writes: false });
 
-  it('lists the setup helper plus the 32-tool default catalog (webhooks excluded)', async () => {
+  it('lists the setup helper plus the 33-tool default catalog (webhooks excluded)', async () => {
     const fetchFn = vi.fn(async () => jsonResponse(200, {}));
     const client = await connectWithTools(
       setupCfg(),
@@ -297,14 +328,14 @@ describe('buildServer setup mode', () => {
     // The setup helper leads, and the catalog is visible to introspection
     // (write gates do not hide tools here — nothing can execute without a
     // token). The webhooks default-off exclusion applies to the listing too,
-    // so the advertised surface matches reality: 32 catalog tools + setup.
+    // so the advertised surface matches reality: 33 catalog tools + setup.
     expect(names).toContain('setup');
     expect(names).toContain('get_account');
     expect(names).toContain('create_catalog_item');
     expect(names).toContain('distribute_release');
     expect(names).not.toContain('list_webhooks');
     expect(names).not.toContain('manage_webhook');
-    expect(names).toHaveLength(33);
+    expect(names).toHaveLength(34);
   });
 
   it('lists the webhook pair in setup mode when webhooks is named explicitly', async () => {

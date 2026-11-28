@@ -30,8 +30,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 // Raised again from 8300 when the catalog sat at ~8299: `enable_beatport` sent
 // no request body, so every call was refused, and its required fields cost
 // ~103 tokens. Same rule: ~200 tokens of headroom, not more.
+// Raised again from 8600 for the review-document tools: the upload tool's
+// required input schema alone is ~155 tokens, and with the new views the
+// catalog sits at ~8763 after trimming the new text. Same rule again.
 // Trim before raising this again.
-const BUDGET_TOKENS = 8600;
+const BUDGET_TOKENS = 8950;
 
 const PACKAGES = resolve(new URL('.', import.meta.url).pathname, '../packages');
 

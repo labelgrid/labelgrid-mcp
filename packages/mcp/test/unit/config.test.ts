@@ -225,6 +225,7 @@ describe('loadConfig toolsets', () => {
       expect(written).toContain('run_release_checks');
       expect(written).toContain('manage_release_links');
       expect(written).toContain('add_review_issue_note');
+      expect(written).toContain('upload_review_document');
       expect(written).toContain('LABELGRID_READ_ONLY=true');
       expect(written).toContain('LABELGRID_ENABLE_WRITES=false');
       vi.restoreAllMocks();

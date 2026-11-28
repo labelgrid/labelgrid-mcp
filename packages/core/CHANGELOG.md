@@ -10,6 +10,18 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `postMultipart` takes an optional fifth argument
+  `{ idempotency, idempotencyKey, maxBytes }`. The first two add an
+  `Idempotency-Key` header, as `post` and `put` do. `maxBytes` refuses a path
+  that is not a regular file (`FILE_NOT_FOUND`) or a file over the limit
+  (`FILE_TOO_LARGE`) before any request is sent.
+- An array value in `postMultipart`'s extra fields is sent as one `name[]` part
+  per item, in order.
+
+Existing calls without the new argument send exactly what they sent before.
+
 ## [0.3.0] - 2026-11-23
 
 ### Changed

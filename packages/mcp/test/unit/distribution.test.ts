@@ -98,6 +98,16 @@ describe('distribution toolset shape', () => {
     expect(byName('enable_beatport').description.toLowerCase()).toContain('confirm the label');
   });
 
+  it('routes a proof_documents_required refusal to the right upload tool per accepted proof', () => {
+    const desc = byName('distribute_release').description;
+    expect(desc).toContain('proof_documents_required');
+    expect(desc).toContain('review_document');
+    expect(desc).toContain('upload_review_document');
+    expect(desc).toContain('review_issue_id');
+    expect(desc).toContain('track_license');
+    expect(desc).toContain('manage_track_license');
+  });
+
   it('carries the immutability caveats in the upload/delete descriptions', () => {
     expect(byName('upload_asset').description).toContain('immutable');
     expect(byName('delete_asset').description).toContain('draft');

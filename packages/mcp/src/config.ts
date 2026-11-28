@@ -188,7 +188,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
         // also carries write tools so a read-only expectation is not violated.
         let warning = `Legacy toolset name "${name}" in LABELGRID_TOOLSETS maps to "${alias}" — update your configuration to use "${alias}".`;
         if (name === 'review' || name === 'delivery') {
-          warning += ` Note: the mapped "${alias}" toolset also contains write tools (run_release_checks, manage_release_links, add_review_issue_note) — set LABELGRID_READ_ONLY=true or LABELGRID_ENABLE_WRITES=false to keep a read-only surface.`;
+          warning += ` Note: the mapped "${alias}" toolset also contains write tools (run_release_checks, manage_release_links, add_review_issue_note, and the full-write upload_review_document) — set LABELGRID_READ_ONLY=true, or LABELGRID_ENABLE_WRITES=false with full writes left off, to keep a read-only surface.`;
         }
         log('warn', warning);
         toolsets.add(alias);

@@ -109,6 +109,10 @@ export const COVERAGE: Record<string, string> = {
   'PUT /releases/{release}/landing-config': 'manage_release_links',
   'POST /releases/short-url': 'manage_release_links',
   'POST /review-issues/{reviewReleaseIssue}/notes': 'add_review_issue_note',
+  // review documents
+  'GET /releases/{release}/review-documents': 'get_release_review',
+  'GET /releases/{release}/review-documents/{reviewDocument}/download': 'get_release_review',
+  'POST /releases/{release}/review-documents': 'upload_review_document',
   // full writes (distribution)
   'POST /tracks/{track}/files/{fileType}/upload-url': 'upload_asset',
   'PUT /tracks/{track}/files/{fileType}': 'upload_asset',
@@ -165,4 +169,7 @@ export const PENDING_DOCS: Record<string, string> = {
   'GET /releases/{releaseId}/delivery-status': 'get_delivery_queue',
   'GET /releases/{release}/profile-protection': 'get_release_profile_protection',
   'GET /tracks/{track}/files/{assetType}/download-url': 'get_asset',
+  'GET /releases/{release}/review-documents': 'get_release_review',
+  'GET /releases/{release}/review-documents/{reviewDocument}/download': 'get_release_review',
+  'POST /releases/{release}/review-documents': 'upload_review_document',
 };
