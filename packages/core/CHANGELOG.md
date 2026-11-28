@@ -10,6 +10,24 @@ server and CLI — there are no API-stability promises before 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `postMultipart` takes an optional fifth argument
+  `{ idempotency, idempotencyKey, maxBytes, expectIdentity }`.
+  `idempotency: true` adds an `Idempotency-Key` header, as it does for `post`
+  and `put`; for `postMultipart`, an explicit `idempotencyKey` is sent even
+  without `idempotency: true`. With `maxBytes` (a
+  non-negative safe integer, otherwise `INVALID_LIMIT`) or `expectIdentity`
+  (the `dev` and `ino` the caller checked), the file is read through one
+  handle that does not follow a final symbolic link. A symlink or a path that
+  is not a regular file returns `FILE_NOT_FOUND`, a different file than the
+  one checked `FILE_CHANGED`, and a file over the limit `FILE_TOO_LARGE`, all
+  before any request is sent.
+- An array value in `postMultipart`'s extra fields is sent as one `name[]` part
+  per item, in order.
+
+Existing calls without the new argument send exactly what they sent before.
+
 ## [0.3.0] - 2026-11-23
 
 ### Changed

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -379,6 +379,166 @@ describe('uploadViaPresignedUrl', () => {
     expect('error' in r && r.error.message).toMatch(/over the 1-byte upload limit/);
     // Fails locally before any network call.
     expect(calls.length).toBe(0);
+  });
+});
+
+describe('postMultipart maxBytes', () => {
+  let dir: string;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'lgmcp-multipart-size-'));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  function noCallFetch() {
+    const fetchFn = vi.fn(async () => new Response('{}', { status: 201 }));
+    return fetchFn;
+  }
+
+  it('returns FILE_TOO_LARGE with no request for a file over the limit', async () => {
+    const pdf = join(dir, 'big.pdf');
+    writeFileSync(pdf, Buffer.alloc(11, 0x25));
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 10 },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_TOO_LARGE');
+    expect('error' in r && r.error.message).toMatch(/over the 10-byte upload limit/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('sends a file at exactly the limit, with its whole content', async () => {
+    const pdf = join(dir, 'exact.pdf');
+    const bytes = Buffer.from('0123456789');
+    writeFileSync(pdf, bytes);
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 10 },
+    );
+    expect('data' in r).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const form = (fetchFn.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    const file = form.get('file') as File;
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(bytes);
+    expect(file.name).toBe('exact.pdf');
+  });
+
+  it('refuses a directory with no request', async () => {
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      dir,
+      'file',
+      undefined,
+      { maxBytes: 10 },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'refuses a non-regular file (a character device) with no request',
+    async () => {
+      const fetchFn = noCallFetch();
+      const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+        '/releases/1/review-documents',
+        '/dev/null',
+        'file',
+        undefined,
+        { maxBytes: 10 },
+      );
+      expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
+      expect(fetchFn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns FILE_NOT_FOUND with no request for a missing file', async () => {
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      join(dir, 'missing.pdf'),
+      'file',
+      undefined,
+      { maxBytes: 10 },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it.each([Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY])(
+    'returns INVALID_LIMIT with no request for maxBytes %s',
+    async (maxBytes) => {
+      const pdf = join(dir, 'limit.pdf');
+      writeFileSync(pdf, Buffer.from('%PDF'));
+      const fetchFn = noCallFetch();
+      const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+        '/releases/1/review-documents',
+        pdf,
+        'file',
+        undefined,
+        { maxBytes },
+      );
+      expect('error' in r && r.error.code).toBe('INVALID_LIMIT');
+      expect(fetchFn).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns FILE_CHANGED with no request when the opened file is not the expected one', async () => {
+    const pdf = join(dir, 'opened.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF opened'));
+    const other = join(dir, 'other.pdf');
+    writeFileSync(other, Buffer.from('%PDF other'));
+    const { dev, ino } = statSync(other, { bigint: true });
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 100, expectIdentity: { dev, ino } },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_CHANGED');
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('sends the file when the opened file is the expected one', async () => {
+    const pdf = join(dir, 'same.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF same'));
+    const { dev, ino } = statSync(pdf, { bigint: true });
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      pdf,
+      'file',
+      undefined,
+      { maxBytes: 100, expectIdentity: { dev, ino } },
+    );
+    expect('data' in r).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a symlink as the opened path with no request', async () => {
+    const target = join(dir, 'target.pdf');
+    writeFileSync(target, Buffer.from('%PDF target'));
+    const link = join(dir, 'link.pdf');
+    symlinkSync(target, link);
+    const fetchFn = noCallFetch();
+    const r = await client(fetchFn as unknown as typeof fetch).postMultipart(
+      '/releases/1/review-documents',
+      link,
+      'file',
+      undefined,
+      { maxBytes: 100 },
+    );
+    expect('error' in r && r.error.code).toBe('FILE_NOT_FOUND');
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
 

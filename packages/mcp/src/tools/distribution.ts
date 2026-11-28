@@ -231,7 +231,7 @@ const distributeRelease: ToolDef = {
   gate: 'full_write',
   title: 'Distribute a release',
   description:
-    'Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission.',
+    'Submit a release to the stores/outlets — the FINAL action that sends it out; run_release_checks (check validate) should pass first. The server enforces the account’s weekly submission limit. Reuse the SAME idempotency_key when retrying an unobserved call; without one each call is a new submission. On proof_documents_required, any one listed proof answers each details entry: review_document → upload_review_document (with review_issue_id); track_license → manage_track_license.',
   inputShape: { release_id: releaseId, idempotency_key: idempotencyKey },
   annotations: { destructiveHint: true },
   handler: (args, { client }) =>

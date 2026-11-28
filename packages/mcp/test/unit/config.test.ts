@@ -225,6 +225,11 @@ describe('loadConfig toolsets', () => {
       expect(written).toContain('run_release_checks');
       expect(written).toContain('manage_release_links');
       expect(written).toContain('add_review_issue_note');
+      expect(written).toContain('the full-write upload_review_document');
+      // The read-only guidance: READ_ONLY alone, or ENABLE_WRITES=false only with full writes off.
+      expect(written).toContain(
+        'set LABELGRID_READ_ONLY=true, or LABELGRID_ENABLE_WRITES=false with full writes left off, to keep a read-only surface',
+      );
       expect(written).toContain('LABELGRID_READ_ONLY=true');
       expect(written).toContain('LABELGRID_ENABLE_WRITES=false');
       vi.restoreAllMocks();

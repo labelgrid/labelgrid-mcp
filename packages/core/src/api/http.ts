@@ -9,7 +9,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { open, readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { contentType } from './content-types.js';
 
@@ -244,6 +245,101 @@ function normalizeError(res: Response, body: unknown): ApiError {
         server.code ?? 'ERROR',
         server.message ?? `Request failed with status ${status}.`,
       );
+  }
+}
+
+function fileTooLarge(size: number, limit: number): ApiError {
+  return {
+    code: 'FILE_TOO_LARGE',
+    message: `The file is ${size} bytes, over the ${limit}-byte upload limit.`,
+    status: 0,
+  };
+}
+
+/** The device and inode a caller checked, to be matched by the file actually opened. */
+/** A file's device and inode, from a `bigint` stat so large inode numbers stay exact. */
+export type FileIdentity = { dev: bigint; ino: bigint };
+
+/**
+ * Reads a file of at most `maxBytes` through one open handle. What is
+ * guaranteed, from the open onwards:
+ * - the open does not follow a symbolic link in the final path component
+ *   (`O_NOFOLLOW`), and is non-blocking, so a FIFO cannot hang the call;
+ * - `fstat` on that handle must show a regular file within the limit and, when
+ *   `expectIdentity` is given, the same device and inode the caller checked;
+ * - the bytes come from that handle, and the read stops at `maxBytes + 1`
+ *   bytes, so a file that grows after the check is never buffered past the
+ *   limit.
+ * A file replaced before the open is caught only through `expectIdentity`.
+ * An open/read failure other than a refused symlink throws for the caller to map.
+ */
+async function readBoundedFile(
+  filePath: string,
+  maxBytes: number,
+  expectIdentity?: FileIdentity,
+): Promise<{ bytes: Buffer } | { error: ApiError }> {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try {
+    handle = await open(
+      filePath,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ELOOP') {
+      return {
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: `Could not read file at ${filePath}: the path is a symbolic link.`,
+          status: 0,
+        },
+      };
+    }
+    throw err;
+  }
+  try {
+    const stat = await handle.stat({ bigint: true });
+    if (!stat.isFile()) {
+      return {
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: `Could not read file at ${filePath}: not a regular file.`,
+          status: 0,
+        },
+      };
+    }
+    if (
+      expectIdentity !== undefined &&
+      (stat.dev !== expectIdentity.dev || stat.ino !== expectIdentity.ino)
+    ) {
+      return {
+        error: {
+          code: 'FILE_CHANGED',
+          message: `The file at ${filePath} changed after it was checked; nothing was sent.`,
+          status: 0,
+        },
+      };
+    }
+    const size = Number(stat.size);
+    if (size > maxBytes) return { error: fileTooLarge(size, maxBytes) };
+    // Sized to the stat'd length plus one byte, so reaching end-of-file needs no
+    // regrowth; a file that grew after the stat grows the buffer, never past
+    // maxBytes + 1.
+    let buffer = Buffer.alloc(size + 1);
+    let total = 0;
+    for (;;) {
+      if (total === buffer.length) {
+        const grown = Buffer.alloc(Math.min(buffer.length * 2, maxBytes + 1));
+        buffer.copy(grown, 0, 0, total);
+        buffer = grown;
+      }
+      const { bytesRead } = await handle.read(buffer, total, buffer.length - total, total);
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > maxBytes) return { error: fileTooLarge(total, maxBytes) };
+    }
+    return { bytes: buffer.subarray(0, total) };
+  } finally {
+    await handle.close();
   }
 }
 
@@ -492,18 +588,55 @@ export class LabelGridClient {
 
   /**
    * Sends a multipart/form-data POST with a single file field plus optional
-   * extra string fields. A missing/unreadable file yields a FILE_NOT_FOUND
-   * error result rather than throwing.
+   * extra fields. A string value is one part; an array value under a bare key
+   * (`track_ids`) becomes one `track_ids[]` part per item, in order. A
+   * missing/unreadable file yields a FILE_NOT_FOUND error result rather than
+   * throwing.
+   *
+   * `opts.idempotency` adds an Idempotency-Key header, as the JSON verbs do; an
+   * explicit `opts.idempotencyKey` is always sent, with or without it.
+   * `opts.maxBytes` (a non-negative safe integer, else INVALID_LIMIT) bounds
+   * the file, and `opts.expectIdentity` names the device and inode the caller
+   * checked. Either one reads through a single handle that refuses a final
+   * symlink: a non-regular file or symlink returns FILE_NOT_FOUND, a different
+   * file FILE_CHANGED, a file over the limit FILE_TOO_LARGE, all without
+   * sending anything.
    */
   async postMultipart<T>(
     path: string,
     filePath: string,
     fieldName: string,
-    extra?: Record<string, string>,
+    extra?: Record<string, string | string[]>,
+    opts?: {
+      idempotency?: boolean;
+      idempotencyKey?: string;
+      maxBytes?: number;
+      expectIdentity?: FileIdentity;
+    },
   ): Promise<ApiResult<T>> {
+    const maxBytes = opts?.maxBytes;
+    if (maxBytes !== undefined && !(Number.isSafeInteger(maxBytes) && maxBytes >= 0)) {
+      return {
+        error: {
+          code: 'INVALID_LIMIT',
+          message: `maxBytes must be a non-negative safe integer; got ${String(maxBytes)}.`,
+          status: 0,
+        },
+      };
+    }
     let bytes: Buffer;
     try {
-      bytes = await readFile(filePath);
+      if (maxBytes === undefined && opts?.expectIdentity === undefined) {
+        bytes = await readFile(filePath);
+      } else {
+        const bounded = await readBoundedFile(
+          filePath,
+          maxBytes ?? Number.MAX_SAFE_INTEGER,
+          opts?.expectIdentity,
+        );
+        if ('error' in bounded) return { error: bounded.error };
+        bytes = bounded.bytes;
+      }
     } catch (err) {
       return {
         error: {
@@ -529,10 +662,18 @@ export class LabelGridClient {
     const view = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength) as BlobPart;
     form.append(fieldName, new Blob([view], { type: contentType(filePath) }), basename(filePath));
     for (const [key, value] of Object.entries(extra ?? {})) {
-      form.append(key, value);
+      if (Array.isArray(value)) {
+        for (const item of value) form.append(`${key}[]`, item);
+      } else {
+        form.append(key, value);
+      }
     }
     // Let fetch set the multipart Content-Type boundary; do not override it.
-    return this.send<T>('POST', path, { rawBody: form });
+    return this.send<T>('POST', path, {
+      rawBody: form,
+      idempotency: opts?.idempotency === true || opts?.idempotencyKey !== undefined,
+      idempotencyKey: opts?.idempotencyKey,
+    });
   }
 
   /**

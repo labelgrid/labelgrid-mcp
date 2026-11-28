@@ -452,6 +452,85 @@ describe('LabelGridClient.postMultipart', () => {
     const uploadResult = await client.postMultipart('/x', tiff, 'file');
     expect('data' in uploadResult).toBe(true);
   });
+
+  it('sends a caller-supplied Idempotency-Key verbatim', async () => {
+    const pdf = join(dir, 'proof.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(201, { data: {} }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart(
+      '/x',
+      pdf,
+      'file',
+      undefined,
+      { idempotency: true, idempotencyKey: 'retry-key-0001' },
+    );
+    expect(headerOf(lastInit(fetchFn), 'Idempotency-Key')).toBe('retry-key-0001');
+  });
+
+  it('sends an explicit idempotencyKey even without idempotency: true', async () => {
+    const pdf = join(dir, 'proof-key-only.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(201, { data: {} }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart(
+      '/x',
+      pdf,
+      'file',
+      undefined,
+      { idempotencyKey: 'key-only-0001' },
+    );
+    expect(headerOf(lastInit(fetchFn), 'Idempotency-Key')).toBe('key-only-0001');
+  });
+
+  it('generates an Idempotency-Key when idempotency is on and no key is given', async () => {
+    const pdf = join(dir, 'proof-gen.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(201, { data: {} }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart(
+      '/x',
+      pdf,
+      'file',
+      undefined,
+      { idempotency: true },
+    );
+    expect(headerOf(lastInit(fetchFn), 'Idempotency-Key')).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('appends one bare-key[] part per value for an array extra, in order', async () => {
+    const pdf = join(dir, 'proof-tracks.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(201, { data: {} }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart('/x', pdf, 'file', {
+      type: 'rights_proof',
+      track_ids: ['3', '10', '7'],
+    });
+    const form = lastInit(fetchFn).body as FormData;
+    expect(form.getAll('track_ids[]')).toEqual(['3', '10', '7']);
+    expect(form.has('track_ids[][]')).toBe(false);
+    expect(form.has('track_ids')).toBe(false);
+    expect([...form.keys()]).toEqual(['file', 'type', 'track_ids[]', 'track_ids[]', 'track_ids[]']);
+  });
+
+  it('leaves an existing-style call unchanged: string extras, no Idempotency-Key', async () => {
+    const pdf = join(dir, 'license.pdf');
+    writeFileSync(pdf, Buffer.from('%PDF-1.4'));
+    const fetchFn = vi.fn(async () => jsonResponse(200, { ok: true }));
+    await makeClient(fetchFn as unknown as typeof fetch).postMultipart(
+      '/tracks/4/licenses',
+      pdf,
+      'file',
+      { type: 'cover', license_id: 'REF-1' },
+    );
+    const init = lastInit(fetchFn);
+    expect(lastUrl(fetchFn)).toBe(`${BASE}/tracks/4/licenses`);
+    expect(init.method).toBe('POST');
+    expect(headerOf(init, 'Idempotency-Key')).toBeUndefined();
+    const form = init.body as FormData;
+    expect([...form.keys()]).toEqual(['file', 'type', 'license_id']);
+    expect(form.get('type')).toBe('cover');
+    expect((form.get('file') as File).name).toBe('license.pdf');
+  });
 });
 
 describe('LabelGridClient response-size bounds', () => {

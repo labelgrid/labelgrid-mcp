@@ -1,13 +1,16 @@
 /**
  * Releases toolset: release-level reads (review results, delivery status,
- * the smart-link landing config, track licenses) plus the safe-write release
- * checks, landing-page management and review-issue notes.
+ * the smart-link landing config, track licenses, review documents) plus the
+ * safe-write release checks, landing-page management and review-issue notes,
+ * and the full-write review-document upload.
  *
  * The two [proj] reads (`get_release_review`, `get_delivery_queue`) default to
  * concise-mode projection; `response_format: 'detailed'` returns the verbatim
  * API response.
  */
 
+import { statSync } from 'node:fs';
+import { type ApiResult, assertAllowedExtension } from '@labelgrid/core';
 import { z } from 'zod';
 import { applyProjection } from '../projection.js';
 import type { ToolDef } from './types.js';
@@ -21,22 +24,80 @@ const responseFormat = z
     "'concise' (default) keeps high-signal fields and ids; 'detailed' is the verbatim response.",
   );
 
+/** A positive decimal id, as a number or as the string a list response returns. */
+const decimalId = z.union([
+  z.string().regex(/^[1-9][0-9]*$/),
+  // Only ids a number holds exactly; a larger id goes as a decimal string.
+  z
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER),
+]);
+
+/** Reduces each listed review document's `tracks` to `track_ids`; `upload` is kept whole. */
+function slimReviewDocuments(result: ApiResult<unknown>): ApiResult<unknown> {
+  if (!('data' in result)) return result;
+  const body = result.data as Record<string, unknown> | null;
+  if (body === null || typeof body !== 'object' || !Array.isArray(body.data)) return result;
+  return {
+    data: {
+      ...body,
+      data: body.data.map((doc: unknown) => {
+        if (doc === null || typeof doc !== 'object') return doc;
+        const { tracks, ...rest } = doc as Record<string, unknown>;
+        if (!Array.isArray(tracks)) return doc;
+        return {
+          ...rest,
+          track_ids: tracks.map((t: unknown) =>
+            t !== null && typeof t === 'object' ? (t as { id?: unknown }).id : t,
+          ),
+        };
+      }),
+    },
+  };
+}
+
 const getReleaseReview: ToolDef = {
   name: 'get_release_review',
   toolset: 'releases',
   gate: 'read',
   title: 'Get release review results',
   description:
-    "Read a release's automated quality-check results. Pick ONE view with `view`: " +
-    '`issues` lists the review issues raised against the release — each with a code (see list_reference_data type issue_definitions), severity, and whether it blocks distribution. ' +
-    '`quality_report` returns the Preflight QC quality report — customer-facing issues to review before confirming distribution; Preflight QC is an optional add-on — without it the API returns a 403, surfaced verbatim.',
+    "Read a release's review. Pick ONE `view`: " +
+    '`issues`: review issues, each with a code (see list_reference_data issue_definitions), severity and whether it blocks distribution. ' +
+    '`quality_report`: the Preflight QC report to check before confirming distribution (an optional add-on; 403 without it). ' +
+    '`documents`: review documents and the requests an upload can answer. ' +
+    '`document_download`: a temporary link for `review_document_id`, fetched without the LabelGrid token. ' +
+    '`response_format` applies to issues and quality_report only.',
   inputShape: {
     release_id: releaseId,
-    view: z.enum(['issues', 'quality_report']).describe('Which review read.'),
+    view: z
+      .enum(['issues', 'quality_report', 'documents', 'document_download'])
+      .describe('Which review read.'),
+    review_document_id: z.number().int().positive().optional(),
     response_format: responseFormat,
   },
   annotations: { readOnlyHint: true },
   handler: async (args, { client }) => {
+    if (args.view === 'documents') {
+      return slimReviewDocuments(await client.get(`/releases/${args.release_id}/review-documents`));
+    }
+    if (args.view === 'document_download') {
+      if (args.review_document_id === undefined) {
+        return {
+          error: {
+            code: 'INVALID_SELECTOR',
+            message:
+              "view 'document_download' requires `review_document_id` — a document id from view documents.",
+            status: 0,
+          },
+        };
+      }
+      return client.get(
+        `/releases/${args.release_id}/review-documents/${String(args.review_document_id)}/download`,
+      );
+    }
     const result =
       args.view === 'quality_report'
         ? await client.get(`/releases/${args.release_id}/quality-report`)
@@ -189,6 +250,70 @@ const addReviewIssueNote: ToolDef = {
     client.post(`/review-issues/${args.review_issue_id}/notes`, { note: args.note }),
 };
 
+const REVIEW_DOCUMENT_EXTS = ['.pdf', '.jpg', '.jpeg', '.png'];
+const REVIEW_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+const uploadReviewDocument: ToolDef = {
+  name: 'upload_review_document',
+  toolset: 'releases',
+  gate: 'full_write',
+  title: 'Upload a review document',
+  description:
+    'Upload a PDF/JPG/PNG review document, max 20 MB. To answer a request, pass review_issue_id from get_release_review view documents (answerable_issues: accepted types, scope; track scope needs track_ids). Without it: a general upload. Retry with the same key and file.',
+  inputShape: {
+    release_id: z.number().int().positive(),
+    file_path: z.string(),
+    type: z.enum([
+      'ai_statement',
+      'rights_proof',
+      'artist_authorization',
+      'split_sheet',
+      'remix_authorization',
+    ]),
+    review_issue_id: decimalId.optional(),
+    track_ids: z.array(z.number().int().positive()).min(1).max(200).optional(),
+    idempotency_key: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/),
+  },
+  annotations: { destructiveHint: false },
+  handler: async (args, { client }): Promise<ApiResult<unknown>> => {
+    const ext = assertAllowedExtension(args.file_path as string, REVIEW_DOCUMENT_EXTS);
+    if ('error' in ext) return { error: ext.error };
+    // The device and inode at the checked path, taken now: core refuses to send a
+    // different file if the path is replaced between this stat and its open.
+    let identity: { dev: bigint; ino: bigint };
+    try {
+      const { dev, ino } = statSync(ext.realPath, { bigint: true });
+      identity = { dev, ino };
+    } catch (err) {
+      return {
+        error: {
+          code: 'FILE_NOT_FOUND',
+          message: `Could not read file at ${ext.realPath}: ${err instanceof Error ? err.message : 'unknown error'}`,
+          status: 0,
+        },
+      };
+    }
+    const extra: Record<string, string | string[]> = { type: String(args.type) };
+    if (args.review_issue_id !== undefined) extra.review_issue_id = String(args.review_issue_id);
+    if (Array.isArray(args.track_ids)) {
+      // Sorted and deduplicated, so a retry under the same key sends the same request.
+      extra.track_ids = [...new Set(args.track_ids as number[])].sort((a, b) => a - b).map(String);
+    }
+    return client.postMultipart(
+      `/releases/${args.release_id}/review-documents`,
+      ext.realPath,
+      'file',
+      extra,
+      {
+        idempotency: true,
+        idempotencyKey: args.idempotency_key as string,
+        maxBytes: REVIEW_DOCUMENT_MAX_BYTES,
+        expectIdentity: identity,
+      },
+    );
+  },
+};
+
 export const releaseTools: ToolDef[] = [
   getReleaseReview,
   getDeliveryQueue,
@@ -198,4 +323,5 @@ export const releaseTools: ToolDef[] = [
   runReleaseChecks,
   manageReleaseLinks,
   addReviewIssueNote,
+  uploadReviewDocument,
 ];
