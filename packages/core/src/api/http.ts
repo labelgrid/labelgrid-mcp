@@ -257,7 +257,8 @@ function fileTooLarge(size: number, limit: number): ApiError {
 }
 
 /** The device and inode a caller checked, to be matched by the file actually opened. */
-export type FileIdentity = { dev: number | bigint; ino: number | bigint };
+/** A file's device and inode, from a `bigint` stat so large inode numbers stay exact. */
+export type FileIdentity = { dev: bigint; ino: bigint };
 
 /**
  * Reads a file of at most `maxBytes` through one open handle. What is
@@ -308,7 +309,7 @@ async function readBoundedFile(
     }
     if (
       expectIdentity !== undefined &&
-      (stat.dev !== BigInt(expectIdentity.dev) || stat.ino !== BigInt(expectIdentity.ino))
+      (stat.dev !== expectIdentity.dev || stat.ino !== expectIdentity.ino)
     ) {
       return {
         error: {

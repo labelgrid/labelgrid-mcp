@@ -278,8 +278,8 @@ const uploadReviewDocument: ToolDef = {
   handler: async (args, { client }): Promise<ApiResult<unknown>> => {
     const ext = assertAllowedExtension(args.file_path as string, REVIEW_DOCUMENT_EXTS);
     if ('error' in ext) return { error: ext.error };
-    // The identity of the file whose extension was checked: core refuses to send
-    // a different file found at that path when it opens it.
+    // The device and inode at the checked path, taken now: core refuses to send a
+    // different file if the path is replaced between this stat and its open.
     let identity: { dev: bigint; ino: bigint };
     try {
       const { dev, ino } = statSync(ext.realPath, { bigint: true });

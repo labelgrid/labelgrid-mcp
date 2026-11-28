@@ -14,8 +14,9 @@ server and CLI — there are no API-stability promises before 1.0.
 
 - `postMultipart` takes an optional fifth argument
   `{ idempotency, idempotencyKey, maxBytes, expectIdentity }`.
-  `idempotency: true` adds an `Idempotency-Key` header, as `post` and `put` do,
-  and an explicit `idempotencyKey` is always sent. With `maxBytes` (a
+  `idempotency: true` adds an `Idempotency-Key` header, as it does for `post`
+  and `put`; for `postMultipart`, an explicit `idempotencyKey` is sent even
+  without `idempotency: true`. With `maxBytes` (a
   non-negative safe integer, otherwise `INVALID_LIMIT`) or `expectIdentity`
   (the `dev` and `ino` the caller checked), the file is read through one
   handle that does not follow a final symbolic link. A symlink or a path that
